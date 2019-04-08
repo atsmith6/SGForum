@@ -1,0 +1,78 @@
+﻿@page
+@using SGDataModel
+@model SGWEB.Pages.TopicModel
+@{
+}
+
+<form style="width: 100%;" method="post">
+	<input style="display: none;" asp-for="ParentTopicId"></input>
+	<input style="display: none;" asp-for="TopicId"></input>
+	<input style="display: none;" asp-for="LastTopicPage"></input>
+	<input style="display: none;" asp-for="LastPostPage"></input>
+	<input style="display: none;" asp-for="Mode"></input>
+
+<div class="text-center">
+
+@if(Model.Message != null)
+{
+	string divClass = (Model.Message.ToLower().StartsWith("error:") ? "SGErrorMessage" : "SGMessage");
+
+	<div class="@divClass">
+		@Model.Message
+	</div>
+}
+
+<div class="pathDiv bordered">
+	<a href="@Html.Raw(Model.CreateReturnPath())">
+		Back to topics	
+	</a>
+</div>
+
+
+
+	<div class="SGUI2Col">
+	@if(Model.IsDelete)
+	{
+		<div class="SGUILabel">Please Confirm:</div>
+		<div>Are you certain that you want to delete this topic?  All sub-topics and posts will be deleted too!  This cannot be undone.</div>
+		
+		<div class="SGUIRightAlign">
+			<button name="button" type="submit" value="delete">Yes</button>
+			<button name="button" type="submit" value="return">Cancel</button>
+		</div>
+	}
+	else
+	{
+		<div class="SGUILabel">Topic</div>
+		<div><input asp-for="TopicTitle" readonly="@Model.IsReadOnly"></input></div>
+	
+		<div class="SGUILabel">Role To View</div>
+		<div>
+			<select asp-for="RoleToRead" asp-items="@Model.RoleNames" disabled="@Model.IsReadOnly"></select>
+		</div>
+	
+		<div class="SGUILabel">Role To Edit</div>
+		<div>
+			<select asp-for="RoleToEdit" asp-items="@Model.RoleNames" disabled="@Model.IsReadOnly"></select>
+		</div>
+		
+		@if(Model.IsReadOnly)
+		{
+			<div class="SGUIRightAlign">
+				<button name="button" type="submit" value="edit">Edit</button>
+			</div>
+		}
+		else
+		{
+			<div class="SGUIRightAlign">
+				<button name="button" type="submit" value="save">Save</button>
+				<button name="button" type="submit" value="cancel">Cancel</button>
+			</div>
+		}
+	}
+	</div>
+
+
+</div>
+
+</form>

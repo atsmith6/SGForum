@@ -1,0 +1,94 @@
+﻿@page
+@using SGDataModel
+@model SGWEB.Pages.AccountModel
+@{
+}
+
+<form method="post">
+		<input style="display: none;" asp-for="CurrentUser.Id"></input>
+
+<div class="text-center">
+
+@if(Model.Message != null)
+{
+	string divClass = (Model.Message.ToLower().StartsWith("error:") ? "SGErrorMessage" : "SGMessage");
+
+	<div class="@divClass">
+		@Model.Message
+	</div>
+}
+
+@{
+	var readOnly = Model.Mode != "edit";
+	var canEditRole = Model.IsAdmin && Model.Token.UserId != Model.CurrentUser.Id;
+	
+		<div class="SGUI2Col">
+			<div>E-mail</div>
+			<div><input asp-for="CurrentUser.Email" readonly="@(readOnly)"></input></div>
+			<div>Display Name</div>
+			<div><input asp-for="CurrentUser.DisplayName" readonly="@(readOnly)"></input></div>
+			<div>Role</div>
+			
+			@if(canEditRole)
+			{
+				<div>
+				<select asp-for="CurrentUser.RawRole" asp-items="@Model.RoleNames" disabled="@(readOnly)">
+				</select>
+				</div>
+			}
+			else
+			{
+				<div>
+				<select asp-for="CurrentUser.RawRole" asp-items="@Model.RoleNames" disabled="true">
+				</select>
+				</div>
+			}
+
+			@if(Model.IsAdmin)
+			{
+				<div>Status</div>
+				if(canEditRole)
+				{
+					<div>
+						<select asp-for="CurrentUser.Active" asp-items="@Model.ActiveNames" disabled="@(readOnly)">
+						</select>
+					</div>
+				}
+				else
+				{
+					<div>
+						<select asp-for="CurrentUser.Active" asp-items="@Model.ActiveNames" disabled="true">
+						</select>
+					</div>
+				}
+			}
+			else
+			{
+				<div>
+					<select style="display: none;" asp-for="CurrentUser.Active" asp-items="@Model.ActiveNames" disabled="true">
+					</select>
+				</div>
+			}
+
+			
+			@if(Model.Mode == "edit")
+			{
+				<div class="SGUIRightAlign">
+					<button name="button" type="submit" value="cancel">Cancel</button>
+					<button name="button" type="submit" value="save">Save</button>
+				</div>
+			}
+			else
+			{
+				<div class="SGUIRightAlign">
+					<button name="button" type="submit" value="edit">Edit</button>
+				</div>
+			}
+		</div>
+
+}
+
+
+</div>
+
+</form>

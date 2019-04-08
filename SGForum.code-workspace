@@ -1,0 +1,20 @@
+{
+	"folders": [
+		{
+			"path": "SGDataModel"
+		},
+		{
+			"path": "SGDataModel.Tests"
+		},
+		{
+			"path": "SGAPI"
+		},
+		{
+			"path": "SGAPI.Tests"
+		},
+		{
+			"path": "SGWEB"
+		}
+	],
+	"settings": {}
+}

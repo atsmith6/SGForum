@@ -1,0 +1,37 @@
+﻿@page
+@using SGDataModel
+@model SGWEB.Pages.UserListModel
+@{
+}
+
+<div class="text-center">
+
+<center>
+<table class="SGUserList">
+@foreach (var user in Model.Users)
+{
+	<tr>
+		<td>
+			<!-- <a asp-page="/Account" asp-route-mode="view" asp-route-userId="@user.Id"> -->
+				@user.Email
+			<!-- </a> -->
+		</td>
+		<td>@user.DisplayName</td>
+		<td>@Model.TranslateRole(user.RawRole)</td>
+		@if (user.Active)
+		{
+			<td>Active</td>
+		}
+		else
+		{
+			<td>Inactive</td>
+		}
+		<td><a asp-page="/Account" asp-route-mode="view" asp-route-userId="@user.Id">
+				<img src="/images/bnOpen.png" alt="Open">
+			</a></td>
+	</tr>
+}
+</table>
+</center>
+
+</div>

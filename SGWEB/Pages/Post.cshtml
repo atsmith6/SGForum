@@ -1,0 +1,54 @@
+﻿@page
+@using SGDataModel
+@model SGWEB.Pages.PostModel
+@{
+}
+
+<form method="post">
+	<input style="display: none;" asp-for="TopicId"></input>
+	<input style="display: none;" asp-for="LastTopicPage"></input>
+	<input style="display: none;" asp-for="LastPostPage"></input>
+	<input style="display: none;" asp-for="PostId"></input>
+	<input style="display: none;" asp-for="Mode"></input>
+
+<div class="text-center">
+
+@if(Model.Message != null)
+{
+	string divClass = (Model.Message.ToLower().StartsWith("error:") ? "SGErrorMessage" : "SGMessage");
+
+	<div class="@divClass">
+		@Model.Message
+	</div>
+}
+
+<div class="pathDiv bordered">
+	<a href="@Html.Raw(Model.CreateReturnPath())">
+		Back to topics	
+	</a>
+</div>
+
+<div class="SGUI2Col">
+
+	<div>Title</div>
+	<div><input asp-for="Title"></input></div>
+	<div style="display: inline; width:100px">Role to read:</div>
+	<div style="display: inline;"><select asp-for="RoleToRead" asp-items="@Model.RoleNames"></select></div>
+	<div style="display: inline; width:100px">Role to edit:</div>
+	<div style="display: inline;"><select asp-for="RoleToEdit" asp-items="@Model.EditRoleNames"></select></div>
+
+</div>
+<div class="SGUIMessageEdit">
+	<div>Message</div>
+	<div><textarea asp-for="BodyText"></textarea></div>
+</div>
+<div class="SGUI2Col">
+	<div class="SGUIRightAlign">
+		<button name="button" type="submit" value="save">Save</button>
+		<button name="button" type="submit" value="cancel">Cancel</button>
+	</div>
+</div>
+
+</div>
+
+</form>

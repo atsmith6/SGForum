@@ -1,0 +1,169 @@
+﻿@page
+@model IndexModel
+@using SGDataModel
+@using System.Collections.Generic;
+@{
+    ViewData["Title"] = "Home page";
+}
+
+<div class="text-center">
+
+@* Write topic navigatoin bar *@
+
+<div class="pathDiv bordered">
+<a asp-page="/Index">Top</a>
+@{
+	if (Model.TopicPath != null)
+	{
+		var path = Model.TopicPath;
+		int last = path.Count - 1;
+		for(int i = 0; i <= last; ++i)
+		{
+			var topic = path[i];
+			<text>&nbsp;/&nbsp;</text>
+			if (i == last)
+			{
+				@topic.Title
+			}
+			else
+			{
+				<a asp-page="/Index"
+					asp-route-topicId="@topic.Id">
+					@Model.TrimTopic(topic.Title)
+				</a>
+			}
+		}
+	}
+}
+</div>
+
+@* Write topics *@
+
+<div class="sectionWrapper">
+@{
+	var showTopicHeader = true;
+	var showTopicList = Model.ForumTopics != null && Model.ForumTopics.Count > 0;
+	var showEditButton = Model.CanEditTopics; 
+}
+
+@if(showTopicHeader)
+{
+	<div class="SGTopicsTitle bordered">
+		Topics
+		@if(showEditButton)
+		{
+			<div style="display: inline">
+				<a href="@Html.Raw(Model.CreateNewTopicHrefHTML())">
+					<img src="/images/bnNew.png" alt="Create Post">
+				</a>
+			</div>
+		}
+		<div class="SGTopicNav">
+			@Html.Raw(Model.CreateTopicPageNavHTML())
+		</div>
+	</div>
+}
+
+@if(showTopicList)
+{
+	var topics = Model.ForumTopics;
+	int topicPageNo = Model.TopicPageLogic.CurrentPage;
+	int postPageNo = (Model.PostPageLogic != null ? Model.PostPageLogic.CurrentPage : -1);
+	foreach(var topic in topics)
+	{
+		<div class="forumDiv bordered">
+			<a asp-page="/Index"
+				asp-route-topicId="@topic.Id">
+				@topic.Title
+			</a>
+			<div style="float:right; margin: 0px;padding: 0px;">
+			@if (topic.OwnerId == Model.Token.UserId || Model.IsAdmin)
+			{
+					<a asp-page="/Topic"
+						asp-route-topicId="@topic.Id"
+						asp-route-topicsPage="@topicPageNo"
+						asp-route-postsPage="@postPageNo">
+						<img src="/images/bnEdit.png" alt="Edit">
+					</a>
+			}
+			@if(Model.IsAdmin)
+			{
+					<a asp-page="/Topic"
+						asp-route-topicId="@topic.Id"
+						asp-route-topicsPage="@topicPageNo"
+						asp-route-postsPage="@postPageNo"
+						asp-route-mode="delete"
+						style="margin-left: 5px;">
+						<img src="/images/bnDelete.png" alt="Delete">
+					</a>
+			}
+			</div>
+		</div>
+	}
+}
+</div>
+
+@* Render posts *@
+
+@{
+	var showPostsHeader = Model.ShowPosts;
+	var showPostsEditButton = Model.CanEditPosts;
+	var showPostsList = Model.ShowPosts && Model.Posts != null && Model.Posts.Count > 0;
+}
+
+<div class="sectionWrapper">
+
+@if(showPostsHeader)
+{
+	<div class="bordered SGPostsTitle">
+		Posts
+		@if(showPostsEditButton)
+		{
+			<div style="display: inline">
+				<a href="@Html.Raw(Model.CreateNewPostHrefHTML())">
+					<img src="/images/bnNew.png" alt="Create Post">
+				</a>
+			</div>
+		}
+		<div class="SGPostNav">
+			@Html.Raw(Model.CreatePostsPageNavHTML())
+		</div>
+	</div>
+}
+
+@if(showPostsList)
+{
+	
+
+	var posts = Model.Posts;
+	var tokenUserId = Model.Token.User.Id;
+	foreach(var post in posts)
+	{
+		<div class="borderedPost postDiv">
+			@if (!string.IsNullOrWhiteSpace(post.Title))
+			{
+				<div class="SGPostTitle">
+					@post.Title
+				</div>
+			}
+			<div class="postAuthor">@post.UserDisplayName_NotMapped - @Model.FormatDate(post.Created)
+			@if (post.Modified != post.Created)
+			{
+				<text>(edited @Model.FormatDate(post.Modified))</text>
+			}
+			@if (post.UserId == tokenUserId)
+			{
+				<div style="float: right">
+					<a href="@Html.Raw(Model.CreateEditPostHrefHTML(post.Id))"><img src="/images/bnEdit.png" alt="Edit"></a>
+				</div>
+			}
+			</div>
+			<div class="postBody">
+				@post.Body
+			</div>
+		</div>
+	}
+}
+</div>
+
+</div>

@@ -1,0 +1,364 @@
+﻿/* Please see documentation at https://docs.microsoft.com/aspnet/core/client-side/bundling-and-minification
+for details on configuring this project to bundle and minify static web assets. */
+
+a.navbar-brand {
+  white-space: normal;
+  text-align: center;
+  word-break: break-all;
+}
+
+/* Sticky footer styles
+-------------------------------------------------- */
+
+:root
+{
+	--font-size: 16px;
+	--font-size-mobile: 15px;
+	--font-col-posttitle: #222;
+	--font-col-postauthor: #666;
+	--font-col-postbody: #555;
+	--main-width: 1000px;
+}
+
+
+html {
+  font-size: var(--font-size);
+}
+@media (max-width: 768px) {
+  html {
+    font-size: var(--font-size-mobile);
+  }
+}
+
+
+.border-top {
+  border-top: 1px solid #e5e5e5;
+}
+.border-bottom {
+  border-bottom: 1px solid #e5e5e5;
+}
+
+.box-shadow {
+  box-shadow: 0 .25rem .75rem rgba(0, 0, 0, .05);
+}
+
+button.accept-policy {
+  font-size: 1rem;
+  line-height: inherit;
+}
+
+/* Sticky footer styles
+-------------------------------------------------- */
+html {
+  position: relative;
+  min-height: 100%;
+}
+
+body {
+  /* Margin bottom by footer height */
+  margin-bottom: 60px;
+  font-family: sans-serif;
+}
+.footer {
+  position: absolute;
+  bottom: 0;
+  width: 100%;
+  white-space: nowrap;
+  /* Set the fixed height of the footer here */
+  height: 60px;
+  line-height: 60px; /* Vertically center the text there */
+}
+.bordered
+{
+	border-style: solid;
+	border-width: 1px;
+	border-top-color: #eef;
+	border-left-color: #bbf;
+	border-right-color: #eef;
+	border-bottom-color: #bbf;
+}
+.borderedPost
+{
+	border-style: solid;
+	border-width: 1px;
+	border-top-color: #eef;
+	border-left-color: #bbc;
+	border-right-color: #eef;
+	border-bottom-color: #bbc;
+}
+.forumDiv, .pathDiv, .postDiv
+{
+	background-color: #ddf;
+	width: 100%;
+	text-align: left;
+	vertical-align: middle;
+	padding: 5px 20px;
+}
+.pathDiv
+{
+	padding: 5px 20px;
+	background-color: #bbf;
+	margin-bottom: 20px;
+}
+.sectionWrapper
+{
+	width: 100%;
+	margin: 0px 0px 20px 0px;
+	padding: 0px;
+}
+.postDiv
+{
+	color: var(--font-col-posttitle);
+	background-color: #eef;
+	padding: 5px 20px;
+}
+.postAuthor
+{
+	color: var(--font-col-postauthor);
+	font-size: 75%;
+	margin-bottom: 5px;
+}
+.postBody
+{
+	margin-left: 20px;
+	color: var(--font-col-postbody);
+	font-size: 90%;
+}
+.SGPostTitle
+{
+	/* background-color: #aab; */
+	/*color: white;*/
+	font-size: 90%;
+	font-weight: bold;
+	/* padding: 0px; */
+}
+.SGGridLabelDiv
+{
+	display: flex;
+	align-items: center;
+}
+.SGGridTextDiv, .SGGridROTextDiv
+{
+	display: flex;
+	align-items: center;
+}
+.SGGridROTextDiv input
+{
+	color: grey;	
+}
+.SGGridButtonDiv
+{
+	display: flex;
+	align-items: center;
+	justify-content: flex-end;
+}
+.SGGridButtonDiv button
+{
+	margin-left: 20px;
+	width: 100px;
+}
+#accountGrid
+{
+	display: grid;
+	max-width: 600px;
+	grid-template-columns: 30% auto;
+	grid-template-rows: 40px 40px 40px 40px;
+	text-align: left;
+}
+#accountGrid div input
+{
+	width: 100%;
+}
+.SGMessage
+{
+	background-color: #afa;
+	border-top-color: #efe;
+	border-left-color: #bfb;
+	border-right-color: #ece;
+	border-bottom-color: #bcb;
+}
+.SGErrorMessage
+{
+	background-color: #faa;
+	border-top-color: #fee;
+	border-left-color: #fbb;
+	border-right-color: #fee;
+	border-bottom-color: #fbb;
+}
+.SGMessage, .SGErrorMessage
+{
+	border-style: solid;
+	border-width: 1px;
+	border-radius: 10px;
+	margin-bottom: 20px;
+	padding: 5px 10px;
+}
+table.SGUserList tr:nth-child(odd)
+{
+	background-color: #eee;
+}
+table.SGUserList tr:nth-child(even)
+{
+	background-color: #fff;
+}
+table.SGUserList tr td
+{
+	text-align: left;
+	padding: 5px 20px;
+}
+.SGPostsTitle
+{
+	text-align: left;
+	background-color: #dde;
+	padding:5px;
+}
+.SGPostNav
+{
+	float: right;
+}
+.SGTopicsTitle
+{
+	text-align: left;
+	background-color: #cce;
+	padding:5px;
+}
+.SGTopicNav
+{
+	float: right;
+}
+div.SGUserControls
+{
+	width: 600px;
+	margin-left: auto;
+	margin-right: auto;
+}
+table.SGUserControls tr td
+{
+	text-align: left;
+}
+table.SGUserControls tr td:nth-child(1)
+{
+	width: 200px;
+}
+table.SGUserControls tr td:nth-child(2)
+{
+	width: 400px;
+}
+table.SGUserControls tr td input
+{
+	width: 100%;
+}
+div.SGUserButtons
+{
+	width: 100%;
+	text-align: right;
+}
+div.SGUserButtons div
+{
+	/* display: inline; */
+	float: right;
+}
+div.SGUserButtons button, div.SGUserButtons div button
+{
+	width: 75px;
+	margin-left: 10px;
+}
+@media (max-width: 600px) 
+{
+	div.SGUserControls
+	{
+		width: 450px;
+	}
+	table.SGUserControls tr td:nth-child(1)
+	{
+		width: 150px;
+	}
+	table.SGUserControls tr td:nth-child(2)
+	{
+		width: 300px;
+	}
+}
+@media (max-width: 450px) 
+{
+	div.SGUserControls
+	{
+		width: 320px;
+	}
+	table.SGUserControls tr td:nth-child(1)
+	{
+		width: 100px;
+	}
+	table.SGUserControls tr td:nth-child(2)
+	{
+		width: 220px;
+	}
+}
+.SGUI2Col
+{
+	width: 600px;
+	display: grid;
+	grid-template-columns: 200px 400px;
+	grid-auto-rows: 32px;
+	justify-content: left;
+	text-align: left;
+	margin-left: auto;
+	margin-right: auto;
+	align-items: center;
+}
+.SGUI2Col input
+{
+	width: 100%;
+	height: 30px;
+}
+.SGUI2Col select
+{
+	height: 30px;
+	min-width: 120px;
+}
+
+.SGUIRightAlign
+{
+	justify-self: right;
+	grid-column: 1 / -1;
+}
+.SGUIMessageEdit
+{
+	width: 600px;
+	text-align: left;
+	margin-left: auto;
+	margin-right: auto;
+}
+.SGUIMessageEdit textarea
+{
+	width: 100%;
+	min-height: 400px;
+}
+@media (max-width: 770px)
+{
+	.SGUI2Col
+	{
+		width: 420px;
+		grid-template-columns: 120px 300px;
+	}
+	.SGUIMessageEdit
+	{
+		width: 420px;
+	}
+}
+@media (max-width: 500px)
+{
+	.SGUILabel
+	{
+		height: 24px;
+		align-self: end;
+	}
+	.SGUI2Col
+	{
+		width: 100%;
+		grid-template-columns: 100%;
+	}
+	.SGUIMessageEdit
+	{
+		width: 100%;
+	}
+}
