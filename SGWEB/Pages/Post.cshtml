@@ -39,7 +39,8 @@
 
 </div>
 <div class="SGUIMessageEdit">
-	<div>Message</div>
+	<div>Message <div style="float: right"><a  data-toggle="collapse" href="#postHelpText">Markdown Syntax Help</a></div></div>
+	<div>@Html.Raw(MarkdownHelpHTML.RawHTML) </div>
 	<div><textarea asp-for="BodyText"></textarea></div>
 </div>
 <div class="SGUI2Col">
