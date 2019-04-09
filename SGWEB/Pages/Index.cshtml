@@ -159,7 +159,7 @@
 			}
 			</div>
 			<div class="postBody">
-				@post.Body
+				@Html.Raw(Model.MarkdownToRawHTML(post.Body))
 			</div>
 		</div>
 	}

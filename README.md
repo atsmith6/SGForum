@@ -4,6 +4,10 @@
 
 SGForum is still in very early pre-alpha stages of development.
 
+##Changelog
+
+9 April: Added markdown interpretter so that posts can now contain markdown which will be converted to HTML at render.
+
 ## Overview
 
 SGForum is a base forum template that can be used to remove the intial work involved in creating a custom forum for any community.  It is divided into a JSON API layer and an HTTPS Web layer to make access over the web or by mobile or desktop apps seamless and easy.  All communication at the API layer is performed over HTTPS using JSON.

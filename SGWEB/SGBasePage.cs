@@ -115,6 +115,15 @@ namespace SGWEB
 				default: return $"<<month>>";
 			}
 		}
+
+		public string MarkdownToRawHTML(string markdown)
+		{
+			if (string.IsNullOrWhiteSpace(markdown))
+				return "";
+			SGMarkdown.Markdown md = new SGMarkdown.Markdown(markdown);
+			return md.RenderRawHTML();
+		}
+
 		public string FormatDate(DateTime dt)
 		{
 			// TODO: Add a conversion to user local time if logged in
