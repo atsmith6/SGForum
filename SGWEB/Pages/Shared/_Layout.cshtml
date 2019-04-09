@@ -29,17 +29,17 @@
                 <div class="navbar-collapse collapse d-sm-inline-flex flex-sm-row-reverse">
                     <ul class="navbar-nav flex-grow-1">
                         <li class="nav-item">
-                            <a class="nav-link text-dark" asp-area="" asp-page="/Index">Forum</a>
+                            <a class="nav-link text-dark" asp-area="" asp-page="/Index"><div class="SGHasTooltip">Forum<div class="SGTooltipTextWide">View the forum topics and posts</div></div></a>
                         </li>
                         <li class="nav-item">
-                            <a class="nav-link text-dark" asp-area="" asp-page="/Privacy">Privacy</a>
+                            <a class="nav-link text-dark" asp-area="" asp-page="/Privacy"><div class="SGHasTooltip">Privacy<div class="SGTooltipTextWide">Read the privacy statement</div></div></a>
                         </li>
 						@if(Model.IsLoggedIn)
 						{
 							<li class="nav-item">
 								<a class="nav-link text-dark" 
 								asp-area="" 
-								asp-page="/Account">Account</a>
+								asp-page="/Account"><div class="SGHasTooltip">Account<div class="SGTooltipTextWide">Your user account settings</div></div></a>
 							</li>
 						}
 						@if(Model.IsAdmin)
@@ -47,7 +47,7 @@
 							<li class="nav-item">
 								<a class="nav-link text-dark" 
 								asp-area="" 
-								asp-page="/UserList">Users</a>
+								asp-page="/UserList"><div class="SGHasTooltip">Users<div class="SGTooltipTextWide">Manage the system users</div></div></a>
 							</li>
 						}
 						<li class="nav-item">

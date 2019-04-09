@@ -27,7 +27,10 @@
 			<td>Inactive</td>
 		}
 		<td><a asp-page="/Account" asp-route-mode="view" asp-route-userId="@user.Id">
-				<img src="/images/bnOpen.png" alt="Open">
+				<div  class="SGHasTooltip">
+					<img src="/images/bnOpen.png" alt="Open">
+					<div class="SGTooltipTextWide">View the user record</div>
+				</div>
 			</a></td>
 	</tr>
 }

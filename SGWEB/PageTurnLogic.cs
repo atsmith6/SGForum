@@ -28,7 +28,7 @@ namespace SGWEB
 			_params.Add(param, value);
 		}
 
-		private void createAnchorElement(StringBuilder sb, string url, PageNumLogic logic, int newPage, string label, IEnumerable<PageNumLogic> others)
+		private void createAnchorElement(StringBuilder sb, string url, PageNumLogic logic, int newPage, string label, string hint, IEnumerable<PageNumLogic> others)
 		{
 			sb.Append("<a href=\"");
 			sb.Append(url);
@@ -55,7 +55,16 @@ namespace SGWEB
 				}
 			}
 			sb.Append("\">");
+			if (!string.IsNullOrWhiteSpace(hint))
+			{
+				sb.Append("<div class=\"SGHasTooltip\">");
+			}
 			sb.Append(WebUtility.HtmlEncode(label));
+			if (!string.IsNullOrWhiteSpace(hint))
+			{
+				sb.Append($"<div class=\"SGTooltipText\">{WebUtility.HtmlEncode(hint.Trim())}</div></div>");
+			}
+
 			sb.Append("</a>");
 		}
 
@@ -69,10 +78,10 @@ namespace SGWEB
 
 			StringBuilder sb = new StringBuilder();
 			if (logic.Previous != null)
-				createAnchorElement(sb, url, logic, logic.Previous.Value, "<<", others);
+				createAnchorElement(sb, url, logic, logic.Previous.Value, "<<", "Previous Page", others);
 			sb.Append($" Page {logic.CurrentPage + 1} of {logic.PageCount} ");
 			if (logic.Next != null)
-				createAnchorElement(sb, url, logic, logic.Next.Value, ">>", others);
+				createAnchorElement(sb, url, logic, logic.Next.Value, ">>", "Next Page", others);
 
 			return sb.ToString();
 		}

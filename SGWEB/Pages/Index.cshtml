@@ -54,7 +54,10 @@
 		{
 			<div style="display: inline">
 				<a href="@Html.Raw(Model.CreateNewTopicHrefHTML())">
-					<img src="/images/bnNew.png" alt="Create Post">
+					<div class="SGHasTooltip">
+						<img src="/images/bnNew.png" alt="Create Post">
+						<div class="SGTooltipText">Create a new topic</div>
+					</div>
 				</a>
 			</div>
 		}
@@ -83,7 +86,10 @@
 						asp-route-topicId="@topic.Id"
 						asp-route-topicsPage="@topicPageNo"
 						asp-route-postsPage="@postPageNo">
-						<img src="/images/bnEdit.png" alt="Edit">
+						<div class="SGHasTooltip">
+							<img src="/images/bnEdit.png" alt="Edit">
+							<div class="SGTooltipText">Edit the topic</div>
+						</div>
 					</a>
 			}
 			@if(Model.IsAdmin)
@@ -94,7 +100,10 @@
 						asp-route-postsPage="@postPageNo"
 						asp-route-mode="delete"
 						style="margin-left: 5px;">
-						<img src="/images/bnDelete.png" alt="Delete">
+						<div  class="SGHasTooltip">
+							<img src="/images/bnDelete.png" alt="Delete">
+							<div class="SGTooltipText">Delete the topic</div>
+						</div>
 					</a>
 			}
 			</div>
@@ -121,7 +130,10 @@
 		{
 			<div style="display: inline">
 				<a href="@Html.Raw(Model.CreateNewPostHrefHTML())">
-					<img src="/images/bnNew.png" alt="Create Post">
+					<div  class="SGHasTooltip">
+						<img src="/images/bnNew.png" alt="Create Post">
+						<div class="SGTooltipText">Create a new post</div>
+					</div>
 				</a>
 			</div>
 		}
@@ -154,7 +166,12 @@
 			@if (post.UserId == tokenUserId)
 			{
 				<div style="float: right">
-					<a href="@Html.Raw(Model.CreateEditPostHrefHTML(post.Id))"><img src="/images/bnEdit.png" alt="Edit"></a>
+					<a href="@Html.Raw(Model.CreateEditPostHrefHTML(post.Id))">
+						<div class="SGHasTooltip">
+							<img src="/images/bnEdit.png" alt="Edit">
+							<div class="SGTooltipText">Edit this post</div>
+						</div>
+					</a>
 				</div>
 			}
 			</div>
