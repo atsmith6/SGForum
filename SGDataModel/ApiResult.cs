@@ -90,5 +90,12 @@ namespace SGDataModel
 		{
 			return JsonConvert.DeserializeObject<ApiError>(json);
 		}
+
+		public static ApiError AuthenticationFailure() { return new ApiError("Authentication failure"); }
+		public static ApiError InvalidToken() { return new ApiError("Invalid login token"); }
+		public static ApiError InvalidParam(string param) { return new ApiError($"Invalid parameter: {param}"); }
+		public static ApiError NotFound() { return new ApiError("Not found"); }
+		public static ApiError ServerError(string message) { return new ApiError($"Server exception: {message}"); }
+		public static ApiError Unauthorised() { return new ApiError("Unauthorised"); }
 	} 
 }

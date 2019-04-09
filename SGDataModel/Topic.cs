@@ -19,6 +19,8 @@ namespace SGDataModel
 
 		[Required]
 		public DateTime Modified { get; set; }
+		[Required]
+		public DateTime Created { get; set; }
 
 		// This is used to handle the limitation against self-referential cascading deletes.
 		[Required]
@@ -50,6 +52,8 @@ namespace SGDataModel
 			topic.RoleToEdit = RoleToEdit;
 			//topic.Parent = null;
 			topic.ParentId = ParentId;
+			topic.Modified = Modified;
+			topic.Created = Created;
 			return topic;
 		}
     }

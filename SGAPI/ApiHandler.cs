@@ -66,7 +66,7 @@ namespace SGAPI
 			}
 			catch(Exception ex)
 			{
-				var ret = new ApiError(ex.Message);
+				var ret = ApiError.ServerError(ex.Message);
 				return ret;
 			}
 		}
@@ -91,96 +91,156 @@ namespace SGAPI
 		}
 
 		/* login(email, password) -> LoginToken */
+		/*
+			Requirements:
+				Token: No
+				User Role: Any
+		 */
 		private async Task<ApiResult> login(ApiCall apiCall)
 		{
 			var email = apiCall.Parameters.OrNull("email");
 			var password = apiCall.Parameters.OrNull("password");
-			if (string.IsNullOrEmpty(email) || string.IsNullOrEmpty(password))
-			{
-				return new ApiError("Invalid credentials");
-			}
+			if (string.IsNullOrWhiteSpace(email))
+				return ApiError.InvalidParam("email");
+			if (string.IsNullOrWhiteSpace(password))
+				return ApiError.InvalidParam("password");
 			var token = await LoginTokenTasks.LoginAsync(_context, email, password);
 			if (token == null)
 			{
-				return new ApiError("Authentication failed.");
+				return ApiError.AuthenticationFailure();
 			}
 			return new ApiResult<LoginToken>(StdResult.OK, token);
 		}
 
 		/* logout(tokenId) -> Success */
+		/*
+			Requirements:
+				Token: Yes
+				User Role: User | Administrator
+		 */
 		/* logout(adminTokenId, email) -> Success */
+		/*
+			Requirements:
+				Token: Yes
+				User Role: Administrator
+		 */
 		private async Task<ApiResult> logout(ApiCall apiCall)
 		{
-			if (apiCall.Parameters.ContainsKey("email"))
+			try
 			{
-				Int64 tokenId = -1;
-				string email = apiCall.Parameters.OrNull("email");
-				if (string.IsNullOrWhiteSpace(email))
-					return new ApiError("Invalid email");
-				if (Int64.TryParse( apiCall.Parameters.OrNull("adminTokenId"), out tokenId))
+				if (apiCall.Parameters.ContainsKey("email"))
 				{
-					var token = await LoginTokenTasks.GetLoginTokenAsync(_context, tokenId);
-					if (token != null)
+					Int64 adminTokenId = -1;
+					string email = apiCall.Parameters.OrNull("email");
+					if (string.IsNullOrWhiteSpace(email))
+						return ApiError.InvalidParam("email");
+					if (Int64.TryParse( apiCall.Parameters.OrNull("adminTokenId"), out adminTokenId))
 					{
-						await LoginTokenTasks.LogoutAsync(_context, token);
-						return new ApiResult(StdResult.OK);
+						var token = await LoginTokenTasks.GetLoginTokenAsync(_context, adminTokenId);
+						var userRole = new UserRole(token.User.RawRole);
+						if (!userRole.IsAdmin)
+						{
+							return ApiError.Unauthorised();
+						}
+						if (token != null)
+						{
+							await LoginTokenTasks.LogoutAsync(_context, token, email);
+							return new ApiResult(StdResult.OK);
+						}
 					}
 				}
-			}
-			else
-			{
-				Int64 tokenId = 0;
-				if (Int64.TryParse( apiCall.Parameters.OrNull("tokenId"), out tokenId))
+				else
 				{
-					var token = await LoginTokenTasks.GetLoginTokenAsync(_context, tokenId);
-					if (token != null)
+					Int64 tokenId = 0;
+					if (Int64.TryParse( apiCall.Parameters.OrNull("tokenId"), out tokenId))
 					{
-						await LoginTokenTasks.LogoutAsync(_context, token);
-						return new ApiResult(StdResult.OK);
+						var token = await LoginTokenTasks.GetLoginTokenAsync(_context, tokenId);
+						if (token != null)
+						{
+							await LoginTokenTasks.LogoutAsync(_context, token);
+							return new ApiResult(StdResult.OK);
+						}
 					}
 				}
+				return ApiError.InvalidToken();
 			}
-			return new ApiError("Invalid tokenId");
+			catch(Exception ex)
+			{
+				Log(ex);
+				return ApiError.ServerError(ex.Message);
+			}
 		}
 
 		/* getToken(tokenId) -> LoginToken */
+		/*
+			Requirements:
+				Token: No (only ID)
+				User Role: Guest | User | Administrator
+		 */
 		private async Task<ApiResult> getToken(ApiCall apiCall)
 		{
-			if (!apiCall.Parameters.ContainsKey("tokenId"))
-				throw new Exception("getToken missing parameter tokenId");
-
-			Int64 tokenId;
-			if (Int64.TryParse(apiCall.Parameters.OrNull("tokenId"), out tokenId))
+			try
 			{
-				LoginToken token;
-				if (tokenId == LoginToken.AnonymousLoginId)
-					token = LoginTokenTasks.GetAnonmymousToken();
-				else
-					token = await LoginTokenTasks.GetLoginTokenAsync(_context, tokenId);
+				if (!apiCall.Parameters.ContainsKey("tokenId"))
+					throw new Exception("getToken missing parameter tokenId");
 
-				if (token == null)
-					return new ApiError("No such token.");
+				Int64 tokenId;
+				if (Int64.TryParse(apiCall.Parameters.OrNull("tokenId"), out tokenId))
+				{
+					LoginToken token;
+					if (tokenId == LoginToken.AnonymousLoginId)
+						token = LoginTokenTasks.GetAnonmymousToken();
+					else
+						token = await LoginTokenTasks.GetLoginTokenAsync(_context, tokenId);
 
-				var result = new ApiResult<LoginToken>(StdResult.OK, token);
-				return result;
+					if (token == null)
+						return ApiError.InvalidToken();
+
+					var result = new ApiResult<LoginToken>(StdResult.OK, token);
+					return result;
+				}
+				return ApiError.InvalidToken();
 			}
-			return new ApiError("Invalid token id.");
+			catch(Exception ex)
+			{
+				Log(ex);
+				return ApiError.ServerError(ex.Message);
+			}
 		}
 
 		/* getDbInfo() -> DatabaseInfo */
+		/*
+			Requirements:
+				Token: No
+				User Role: Any
+		 */
 		private async Task<ApiResult> getDBInfo(ApiCall apiCall)
 		{
-			var info = await _context.databaseInfo.FirstAsync();
-			if (info != null)
-				return new ApiResult<DatabaseInfo>(StdResult.OK, info);
-			return new ApiError("Failed to retrieve the database info object.");
+			try
+			{
+				var info = await _context.databaseInfo.FirstAsync();
+				if (info != null)
+					return new ApiResult<DatabaseInfo>(StdResult.OK, info);
+				return ApiError.NotFound();
+			}
+			catch(Exception ex)
+			{
+				Log(ex);
+				return ApiError.ServerError(ex.Message);
+			}
 		}
 
 		private async Task<LoginToken> quickGetToken(ApiCall apiCall, bool allowAnon = false)
 		{
 			Int64 tokenId;
-			if (!Int64.TryParse(apiCall.Parameters.OrNull("tokenId"), out tokenId))
-				return null;
+			bool parsed = Int64.TryParse(apiCall.Parameters.OrNull("tokenId"), out tokenId);
+			if (!parsed)
+			{
+				if (allowAnon)
+					tokenId = 0;
+				else
+					return null;
+			}
 			if (tokenId == 0 && allowAnon)
 				return LoginTokenTasks.GetAnonmymousToken();
 			var token = await LoginTokenTasks.GetLoginTokenAsync(_context, tokenId);
@@ -188,49 +248,71 @@ namespace SGAPI
 				return token;
 			return null;
 		}
+
 		/* createUser(tokenId, email, displayName, password, role) -> User */
+		/*
+			Requirements:
+				Token: Yes
+				User Role: Administrator
+		 */
 		private async Task<ApiResult> createUser(ApiCall apiCall)
 		{
-			var token = await quickGetToken(apiCall);
-			if (token == null)
-				return new ApiError("Invalid token");
-			var email = apiCall.Parameters.OrNull("email");
-			if (string.IsNullOrWhiteSpace(email))
-				return new ApiError("Invalid parameter: email");
-			var displayname = apiCall.Parameters.OrNull("displayName") ?? "";
-			var password = apiCall.Parameters["password"];
-			if (string.IsNullOrWhiteSpace(password))
-				return new ApiError("Invalid parameter: password");
-			int roleRaw = 0;
-			if (!int.TryParse(apiCall.Parameters.OrNull("role"), out roleRaw) ||
-				!UserRole.RoleIsValid(roleRaw))
-				return new ApiError("Invalid role");
-			var user = await UserTasks.CreateUserAsync(_context, token, email, displayname, password, roleRaw);
-			if (user == null)
-				return new ApiError("Create user failed.");
-			return new ApiResult<User>(StdResult.OK, user);
+			try
+			{
+				var token = await quickGetToken(apiCall);
+				if (token == null)
+					return ApiError.InvalidToken();
+				var userRole = new UserRole(token.User.RawRole);
+				if (!userRole.IsAdmin)
+					return ApiError.Unauthorised();
+				var email = apiCall.Parameters.OrNull("email");
+				if (string.IsNullOrWhiteSpace(email))
+					return ApiError.InvalidParam("email");
+				var displayname = apiCall.Parameters.OrNull("displayName") ?? "";
+				var password = apiCall.Parameters["password"];
+				if (string.IsNullOrWhiteSpace(password))
+					return ApiError.InvalidParam("password");
+				int roleRaw = 0;
+				if (!int.TryParse(apiCall.Parameters.OrNull("role"), out roleRaw) ||
+					!UserRole.RoleIsValid(roleRaw))
+					return ApiError.InvalidParam("role");
+				var user = await UserTasks.CreateUserAsync(_context, token, email, displayname, password, roleRaw);
+				if (user == null)
+					return new ApiError("Create user failed unexpectedly.");
+				return new ApiResult<User>(StdResult.OK, user);
+			}
+			catch(Exception ex)
+			{
+				Log(ex);
+				return ApiError.ServerError(ex.Message);
+			}
 		}
 
 		/* getUser(tokenId, userId) */
+		/*
+			Requirements:
+				Token: Yes
+				User Role: Administrator if userId != token.User.Id | User
+		 */
 		private async Task<ApiResult> getUser(ApiCall apiCall)
 		{
 			try
 			{
 				var token = await quickGetToken(apiCall);
 				if (token == null)
-					return new ApiError("Invalid token");
+					return ApiError.InvalidToken();
 
 				int userId = 0;
 				if (!int.TryParse(apiCall.Parameters.OrNull("userId"), out userId))
-					return new ApiError("Invalid Parameter: userId"); 
+					return ApiError.InvalidParam("userId"); 
 
 				UserRole role = new UserRole( token.User.RawRole );
 				if (!(role.IsAdmin || token.UserId == userId))
-					return new ApiError("Unauthorized"); 
+					return ApiError.Unauthorised(); 
 
 				var user = await (from u in _context.users where u.Id == userId select u).FirstOrDefaultAsync();
 				if (user == null)
-					return new ApiError("Not found");
+					return ApiError.NotFound();
 				
 				user = user.CloneForExport();
 				return new ApiResult<User>(StdResult.OK, user);
@@ -243,16 +325,21 @@ namespace SGAPI
 		}
 
 		/* getUsers(tokenId) */
+		/*
+			Requirements:
+				Token: Yes
+				User Role: Administrator
+		 */
 		private async Task<ApiResult> getUsers(ApiCall apiCall)
 		{
 			try
 			{
 				var token = await quickGetToken(apiCall);
 				if (token == null)
-					return new ApiError("Invalid token");
+					return ApiError.InvalidToken();
 				var role = new UserRole(token.User.RawRole);
 				if (!role.IsAdmin)
-					return new ApiError("Unauthorised");
+					return ApiError.Unauthorised();
 				var users = await (from u in _context.users select u).ToListAsync();
 				for(int i = 0; i < users.Count; ++i)
 				{
@@ -263,21 +350,26 @@ namespace SGAPI
 			catch(Exception ex)
 			{
 				Log(ex);
-				return new ApiError("Internal Server Error");
+				return ApiError.ServerError(ex.Message);
 			}
 		}
 
 		/* updateUser(tokenId, User) -> Success */
+		/*
+			Requirements:
+				Token: Yes
+				User Role: Administrator if userId != token.User.Id | User
+		 */
 		private async Task<ApiResult> updateUser(ApiCall apiCall)
 		{
 			try
 			{
 				var token = await quickGetToken(apiCall);
 				if (token == null)
-					return new ApiError("Invalid token");
+					return ApiError.InvalidToken();
 				var userJson = apiCall.Parameters.OrNull("User");
 				if (string.IsNullOrWhiteSpace(userJson))
-					return new ApiError("userJson parameter missing or empty");
+					return ApiError.InvalidParam("User");
 				User user;
 				try
 				{
@@ -285,7 +377,13 @@ namespace SGAPI
 				}
 				catch
 				{
-					return new ApiError("Invalid User object");
+					return ApiError.InvalidParam("User");
+				}
+				if (token.UserId != user.Id)
+				{
+					var userRole = new UserRole(token.User.RawRole);
+					if (!userRole.IsAdmin)
+						return ApiError.Unauthorised();
 				}
 				await UserTasks.UpdateUserAsync(_context, token, user);
 				return new ApiResult(StdResult.OK);
@@ -293,24 +391,30 @@ namespace SGAPI
 			catch(Exception ex)
 			{
 				Log(ex);
-				return new ApiError("Internal Server Error");
+				return ApiError.ServerError(ex.Message);
 			}
 		}
 
 		/* updatePassword(email, oldPassword, newPassword) -> Success */
+		/*
+			Requirements:
+				Token: No
+				User Role: Any
+				Password: Yes
+		 */
 		private async Task<ApiResult> updatePassword(ApiCall apiCall)
 		{
 			try
 			{
 				var email = apiCall.Parameters.OrNull("email");
 				if (string.IsNullOrWhiteSpace(email))
-					return new ApiError("Invalid parameter: email");
+					return ApiError.InvalidParam("email");
 				var oldPassword = apiCall.Parameters.OrNull("oldPassword");
 				if (string.IsNullOrWhiteSpace(oldPassword))
-					return new ApiError("Invalid parameter: old password");
+					return ApiError.InvalidParam("oldPassword");
 				var newPassword = apiCall.Parameters.OrNull("newPassword");
 				if (string.IsNullOrWhiteSpace(newPassword))
-					return new ApiError("Invalid parameter: new password");
+					return ApiError.InvalidParam("newPassword");
 
 				await UserTasks.UpdatePasswordAsync(_context, email, oldPassword, newPassword);
 
@@ -319,7 +423,7 @@ namespace SGAPI
 			catch(Exception ex)
 			{
 				Log(ex);
-				return new ApiError("Password update failed.");
+				return ApiError.ServerError(ex.Message);
 			}
 		}
 
@@ -329,10 +433,13 @@ namespace SGAPI
 			{
 				var token = await quickGetToken(apiCall);
 				if (token == null)
-					return new ApiError("Invalid token");
+					return ApiError.InvalidToken();
+				var userRole = new UserRole(token.User.RawRole);
+				if (!userRole.IsAdmin)
+					return ApiError.Unauthorised();
 				var email = apiCall.Parameters.OrNull("email");
 				if (string.IsNullOrWhiteSpace(email))
-					return new ApiError("Invalid parameter: email");
+					return ApiError.InvalidParam("email");
 
 				await UserTasks.SetUserActiveAsync(_context, token, email, active);
 				return new ApiError(StdResult.OK);
@@ -340,33 +447,48 @@ namespace SGAPI
 			catch(Exception ex)
 			{
 				Log(ex);
-				return new ApiError("Password update failed.");
+				return ApiError.ServerError(ex.Message);
 			}
 		}
 
 		/* activateUser(tokenId, email) */
+		/*
+			Requirements:
+				Token: Yes
+				User Role: Administrator
+		 */
 		private async Task<ApiResult> activateUser(ApiCall apiCall)
 		{
 			return await activateUser_Impl(apiCall, true);
 		}
 
 		/* deactivateUser(tokenId, email) */
+		/*
+			Requirements:
+				Token: Yes
+				User Role: Administrator
+		 */
 		private async Task<ApiResult> deactivateUser(ApiCall apiCall)
 		{
 			return await activateUser_Impl(apiCall, false);
 		}
 
-		/* getTopics(tokenId, topicId) -> Topic */
+		/* getTopic(tokenId, topicId) -> Topic */
+		/*
+			Requirements:
+				Token: Yes
+				User Role: >= topic.RoleToRead
+		 */
 		private async Task<ApiResult> getTopic(ApiCall apiCall)
 		{
 			try
 			{
 				var token = await quickGetToken(apiCall, true);
 				if (token == null)
-					return new ApiError("Invalid token");
+					return ApiError.InvalidToken();
 				var topicId = apiCall.Parameters.IntOrNull("topicId");
 				if (topicId == null)
-					return new ApiError("Invalid parameter: topicId");
+					return ApiError.InvalidParam("topicId");
 
 				Topic topic = await (from t in _context.topics
 					where t.Id == topicId.Value
@@ -376,29 +498,39 @@ namespace SGAPI
 				{
 					int tokenRole = token.User.RawRole;
 					if (topic.RoleToRead > tokenRole)
-						return new ApiError("Unauthorised");
+						return ApiError.Unauthorised();
 
 					return new ApiResult<Topic>(StdResult.OK, topic.CloneForExport());
 				}
 
-				return new ApiError("Not found");
+				return ApiError.NotFound();
 			}
 			catch(Exception ex)
 			{
 				Log(ex);
-				return new ApiError("getTopics failed.");
+				return ApiError.ServerError(ex.Message);
 			}
 		}
 
 		/* getTopics(tokenId) */
+		/*
+			Requirements:
+				Token: Yes
+				User Role: >= topic.RoleToRead
+		 */
 		/* getTopics(tokenId, parentTopicId) */
+		/*
+			Requirements:
+				Token: Yes
+				User Role: >= topic.RoleToRead
+		 */
 		private async Task<ApiResult> getTopics(ApiCall apiCall)
 		{
 			try
 			{
 				var token = await quickGetToken(apiCall, true);
 				if (token == null)
-					return new ApiError("Invalid token");
+					return ApiError.InvalidToken();
 				List<Topic> topics;
 				int tokenRole = token.User.RawRole;
 				var parentId = apiCall.Parameters.IntOrNull("parentTopicId");
@@ -430,31 +562,33 @@ namespace SGAPI
 			catch(Exception ex)
 			{
 				Log(ex);
-				return new ApiError("getTopics failed.");
+				return ApiError.ServerError(ex.Message);
 			}
 		}
-
-		/* 
-			getTopicPage(tokenId, parentTopicId, page, pageSize) -> TokenResult
-			getTopicPage(tokenId, parentTopicId, page, pageSize) -> TokenResult
-			Note: page -1 defaults to 0, order is descending...
-		 */
+			
+		/*	getTopicPage(tokenId, page, pageSize) -> TokenResult */
+		/*	getTopicPage(tokenId, parentTopicId, page, pageSize) -> TokenResult */
+		/*	Note: page -1 defaults to 0, order is descending... */
+		/*
+			Requirements:
+				Token: No
+				User Role: >= topic.RoleToRead
+		 */	
 		private async Task<ApiResult> getTopicPage(ApiCall apiCall)
 		{
 			try
 			{
 				var token = await quickGetToken(apiCall, true);
 				if (token == null)
-					return new ApiError("Invalid token");
+					return ApiError.InvalidToken();
 
 				var parentId = apiCall.Parameters.IntOrNull("parentTopicId");
 				var page = apiCall.Parameters.IntOrNull("page");
 				var pageSize = apiCall.Parameters.IntOrNull("pageSize");
 				if (page == null)
-					return new ApiError("Invalid parameter: page");
+					return ApiError.InvalidParam("page");
 				if (pageSize == null)
-					return new ApiError("Invalid parameter: pageSize");
-
+					return ApiError.InvalidParam("pageSize");
 				if (page.Value == -1)
 					page = 0;
 
@@ -503,29 +637,56 @@ namespace SGAPI
 			catch(Exception ex)
 			{
 				Log(ex);
-				return new ApiError("getTopics failed.");
+				return ApiError.ServerError(ex.Message);
 			}
 		}
 
 		/* createTopic(loginId, title, roleToEdit, roleToRead) */
 		/* createTopic(loginId, parentTopicId, title, roleToEdit, roleToRead) */
+		/*
+			Requirements:
+				Token: Yes
+				User Role: >= topic.Parent.RoleToEdit | Admin for root topics
+		 */	
+
 		private async Task<ApiResult> createTopic(ApiCall apiCall)
 		{
 			try
 			{
 				var token = await quickGetToken(apiCall);
 				if (token == null)
-					return new ApiError("Invalid token.");
+					return ApiError.InvalidToken();
+
 				var parentTopicId = apiCall.Parameters.IntOrNull("parentTopicId");
+				var userRole = new UserRole(token.User.RawRole);
+				if (parentTopicId == null)  //Only administators can edit the root topic.
+				{
+					if (!userRole.IsAdmin)
+						return ApiError.Unauthorised();
+				}
+				else
+				{
+					var parentTopic = await(from t in _context.topics
+						where t.Id == parentTopicId.Value
+						select t).FirstOrDefaultAsync();
+					if (parentTopic == null)
+						return ApiError.NotFound();
+					if (parentTopic.RoleToEdit > token.User.RawRole)
+						return ApiError.Unauthorised();
+				}
+
 				var title = apiCall.Parameters.OrNull("title");
 				var roleToEdit = apiCall.Parameters.IntOrNull("roleToEdit");
 				var roleToRead = apiCall.Parameters.IntOrNull("roleToRead");
+				
 				if (title == null)
-					return new ApiError("Invalid parameter: title.");
+					return ApiError.InvalidParam("title.");
 				if (roleToEdit == null)
-					return new ApiError("Invalid parameter: roleToEdit.");
+					return ApiError.InvalidParam("roleToEdit.");
 				if (roleToRead == null)
-					return new ApiError("Invalid parameter: roleToRead.");
+					return ApiError.InvalidParam("roleToRead.");
+				if (roleToRead.Value > token.User.RawRole)
+					return new ApiError("The topic would be unreadable by its creator.");
 				var topic = new Topic();
 				topic.Title = title;
 				topic.RoleToEdit = roleToEdit.Value;
@@ -533,7 +694,9 @@ namespace SGAPI
 				topic.ParentId = parentTopicId;
 				topic.IsRootEntry = parentTopicId == null;
 				topic.OwnerId = token.UserId;
-				topic.Modified = DateTime.UtcNow;
+				var now = DateTime.UtcNow;
+				topic.Modified = now;
+				topic.Created = now;
 				_context.topics.Add(topic);
 				await _context.SaveChangesAsync();
 
@@ -542,29 +705,34 @@ namespace SGAPI
 			catch(Exception ex)
 			{
 				Log(ex);
-				return new ApiError("createTopic failed.");
+				return ApiError.ServerError(ex.Message);
 			}
 		}
 
 		/* updateTopic(tokenId, Topic) */
+		/*
+			Requirements:
+				Token: Yes
+				User Role: If User then topic.OwnerId == token.User.Id | Admin
+		 */	
 		private async Task<ApiResult> updateTopic(ApiCall apiCall)
 		{
 			try
 			{
 				var token = await quickGetToken(apiCall);
 				if (token == null)
-					return new ApiError("Invalid token.");
+					return ApiError.InvalidToken();
 				var topic = apiCall.Parameters.FromJson<Topic>("Topic");
 
 				var originalTopic = await (from t in _context.topics
 					where t.Id == topic.Id
 					select t).FirstOrDefaultAsync();
 				if (originalTopic == null)
-					return new ApiError("Topic not found");
+					return ApiError.NotFound();
 				var role = new UserRole(token.User.RawRole);
 				var canUpdate = (role.IsAdmin || (originalTopic.OwnerId != null && originalTopic.OwnerId.Value == token.UserId));
 				if (!canUpdate)
-					return new ApiError("Unauthorised");
+					return ApiError.Unauthorised();
 				originalTopic.Title = topic.Title;
 				originalTopic.RoleToEdit = topic.RoleToEdit;
 				originalTopic.RoleToRead = topic.RoleToRead;
@@ -575,32 +743,38 @@ namespace SGAPI
 			catch(Exception ex)
 			{
 				Log(ex);
-				return new ApiError("updateTopic failed.");
+				return ApiError.ServerError(ex.Message);
 			}
 		}
 
+		/* deleteTopic(tokenId, topicId) -> Success */
+		/*
+			Requirements:
+				Token: Yes
+				User Role: Admin
+		 */	
 		private async Task<ApiResult> deleteTopic(ApiCall apiCall)
 		{
 			try
 			{
 				var token = await quickGetToken(apiCall);
 				if (token == null)
-					return new ApiError("Invalid token.");
+					return ApiError.InvalidToken();
 
 				var topicId = apiCall.Parameters.IntOrNull("topicId");
 				if (topicId == null)
-					return new ApiError("Invalid parameter: Topic");
+					return ApiError.InvalidParam("topicId");
 
 				var userRole = new UserRole(token.User.RawRole);
 				if (!userRole.IsAdmin)
-					return new ApiError("Unauthorised");
+					return ApiError.Unauthorised();
 
 				var topic = await (from t in _context.topics
 					where t.Id == topicId
 					select t).FirstOrDefaultAsync();
 				
 				if (topic == null)
-					return new ApiError("Not Found");
+					return ApiError.NotFound();
 				topic = null;
 
 				/* We use this approach because EF Core doesn't support self-referential cascading. */
@@ -637,7 +811,7 @@ namespace SGAPI
 			catch(Exception ex)
 			{
 				Log(ex);
-				return new ApiError("deleteTopic failed.");
+				return ApiError.ServerError(ex.Message);
 			}
 		}
 
@@ -664,17 +838,23 @@ namespace SGAPI
 		}
 
 		/* getPosts(tokenId, parentTopicId) */
+		/*
+			Requirements:
+				Token: Optional
+				User Role: Any
+				Notes: Post where token.User.Id < post.RoleToRead, and hidden posts, are blanked out
+		 */	
 		private async Task<ApiResult> getPosts(ApiCall apiCall)
 		{
 			try
 			{
 				var token = await quickGetToken(apiCall, true);
 				if (token == null)
-					token = LoginTokenTasks.GetAnonmymousToken();
+					return ApiError.InvalidToken();
 				int tokenRole = token.User.RawRole;
 				var topicId = apiCall.Parameters.IntOrNull("parentTopicId");
 				if (topicId == null)
-					return new ApiError("Invalid parameter: parentTopicId");
+					return ApiError.InvalidParam("parentTopicId");
 				var posts = await (from p in _context.posts.Include(p => p.User)
 					where p.ParentId == topicId.Value
 					orderby p.Id descending
@@ -698,7 +878,7 @@ namespace SGAPI
 			catch(Exception ex)
 			{
 				Log(ex);
-				return new ApiError("getPosts failed.");
+				return ApiError.ServerError(ex.Message);
 			}
 		}
 
@@ -720,27 +900,30 @@ namespace SGAPI
 			getPostPage(tokenId, parentTopicId, page, pageSize) -> TokenResult
 				page = -1 means last page
 		 */
+		/*
+			Requirements:
+				Token: Optional
+				User Role: Any
+				Notes: Post where token.User.Id < post.RoleToRead, and hidden posts, are blanked out
+		 */	
 		private async Task<ApiResult> getPostPage(ApiCall apiCall)
 		{
 			try
 			{
 				var token = await quickGetToken(apiCall, true);
 				if (token == null)
-					token = LoginTokenTasks.GetAnonmymousToken();
+					return ApiError.InvalidToken();
 				int tokenRole = token.User.RawRole;
-				var topicId = apiCall.Parameters.IntOrNull("parentTopicId");
-				if (topicId == null)
-					return new ApiError("Invalid parameter: parentTopicId");
 
 				var parentId = apiCall.Parameters.IntOrNull("parentTopicId");
 				if (parentId == null)
-					return new ApiError("Invalid parameter: parentId");
+					return ApiError.InvalidParam("parentTopicId");
 				var page = apiCall.Parameters.IntOrNull("page");
-				var pageSize = apiCall.Parameters.IntOrNull("pageSize");
 				if (page == null)
-					return new ApiError("Invalid parameter: page");
+					return ApiError.InvalidParam("page");
+				var pageSize = apiCall.Parameters.IntOrNull("pageSize");
 				if (pageSize == null)
-					return new ApiError("Invalid parameter: pageSize");
+					return ApiError.InvalidParam("pageSize");
 
 				int count = await (from p in _context.posts
 					where p.ParentId == parentId.Value
@@ -758,7 +941,7 @@ namespace SGAPI
 					where p.ParentId == parentId.Value
 					orderby p.Created ascending
 					select p);
-				
+
 				var posts = await query.Include(p => p.User).Skip(begin).Take(pageSize.Value).ToListAsync();
 
 				var postsResult = new PostResult();
@@ -772,33 +955,41 @@ namespace SGAPI
 			catch(Exception ex)
 			{
 				Log(ex);
-				return new ApiError("getPosts failed.");
+				return ApiError.ServerError(ex.Message);
 			}
 		}
 
 		/* createPost(tokenId, Post) -> Success */
+		/*
+			Requirements:
+				Token: Yes
+				User Role: User and topic.RoleToRead <= token.User.RawRole | Admin
+		 */	
 		private async Task<ApiResult> createPost(ApiCall apiCall)
 		{
 			try
 			{
 				var token = await quickGetToken(apiCall);
 				if (token == null)
-					return new ApiError("Invalid token.");
+					return ApiError.InvalidToken();
+
 				var postJson = apiCall.Parameters.OrNull("Post");
 				if (string.IsNullOrWhiteSpace(postJson))
-					return new ApiError("Invalid parameter: Post.");
+					return ApiError.InvalidParam("Post");
+
 				var post = JsonConvert.DeserializeObject<Post>(postJson);
 				post.Id = 0;
 				if (post.UserId != token.UserId)
-					return new ApiError("Unauthorised.  The logged in user can't create posts in another user's name.");
+					return ApiError.Unauthorised();
+
 				var topicId = post.ParentId;
 				if (topicId == null)
-					return new ApiError("Invalid parameter: Post.ParentId may not be null.");
+					return ApiError.InvalidParam("Post.ParentId");
 				var topic = await (from t in _context.topics
 					where t.Id == topicId.Value
 					select t).FirstOrDefaultAsync();
 				if(token.User.RawRole < topic.RoleToEdit)
-					return new ApiError("Unauthorised.");
+					return ApiError.Unauthorised();
 				var now = DateTime.UtcNow;
 				post.Created = now;
 				post.Modified = now;
@@ -809,39 +1000,37 @@ namespace SGAPI
 			catch(Exception ex)
 			{
 				Log(ex);
-				return new ApiError("createPost failed.");
+				return ApiError.ServerError(ex.Message);
 			}
 		}
 
-		private delegate void ChangePostDelegate(Post post, bool isAdmin);
-		private async Task<ApiResult> ChangePostAsync(ApiCall apiCall, ChangePostDelegate callback)
+		private async Task<ApiResult> ChangePostAsync(ApiCall apiCall, Action<Post, bool> callback)
 		{
 			try
 			{
 				var token = await quickGetToken(apiCall);
 				if (token == null)
-					return new ApiError("Invalid token.");
+					return ApiError.InvalidToken();
 				var role = new UserRole( token.User.RawRole );
 				var postId = apiCall.Parameters.IntOrNull("postId");
 				if (postId == null)
-					return new ApiError("Invalid Parameter: postId.");
+					return ApiError.InvalidParam("postId");
 				var post = await (from p in _context.posts
 					where p.Id == postId.Value
 					select p).FirstOrDefaultAsync();
 				if (post == null)
-					return new ApiError("Invalid Parameter: Post not found.");
+					return ApiError.NotFound();
 				bool mayChange = (post.UserId != null && post.UserId == token.UserId) ||
 					role.IsAdmin;
 				if (!mayChange)
-					return new ApiError("Unathorised.");
-
+					return ApiError.Unauthorised();
 				try
 				{
 					callback(post, role.IsAdmin);
 				}
 				catch(Exception ex)
 				{
-					return new ApiError(ex.Message);
+					return ApiError.ServerError(ex.Message);
 				}
 				post.Modified = DateTime.Now;
 				_context.Update(post);
@@ -852,51 +1041,61 @@ namespace SGAPI
 			catch(Exception ex)
 			{
 				Log(ex);
-				return new ApiError("deletePost failed.");
+				return ApiError.ServerError(ex.Message);
 			}
 		}
 
 		/* getPost(tokenId, Post) -> Success */
+		/*
+			Requirements:
+				Token: Yes
+				User Role: User | Admin
+		 */	
 		private async Task<ApiResult> getPost(ApiCall apiCall)
 		{
 			try
 			{
 				var token = await quickGetToken(apiCall);
 				if (token == null)
-					return new ApiError("Invalid token.");
+					return ApiError.InvalidToken();
 				var tokenRole = token.User.RawRole;
 
 				var postId = apiCall.Parameters.IntOrNull("postId");
 				if (postId == null)
-					return new ApiError("Invalid parameter: postId");
+					return ApiError.InvalidParam("postId");
 
 				var post = await (from p in _context.posts
 					where p.Id == postId.Value
 					select p).FirstOrDefaultAsync();
 				
 				if (tokenRole < post.RoleToRead)
-					return new ApiError("Authorisation failed.");
+					return ApiError.Unauthorised();
 
 				if (post == null)
-					return new ApiError("Not found");
+					return ApiError.NotFound();
 				
 				return new ApiResult<Post>(StdResult.OK, post.CloneForExport());
 			}
 			catch(Exception ex)
 			{
 				Log(ex);
-				return new ApiError("getPost failed.");
+				return ApiError.ServerError(ex.Message);
 			}
 		}
 
 		/* updatePost(tokenId, Post) -> Success */
+		/*
+			Requirements:
+				Token: Yes
+				User Role: User and post.OwnerId == token.User.Id | Admin
+		 */	
 		private async Task<ApiResult> updatePost(ApiCall apiCall)
 		{
 			try
 			{
 				var post = apiCall.Parameters.FromJson<Post>("Post");
 				if (post == null)
-					return new ApiError("Invalid parameter: Post");
+					return ApiError.InvalidParam("Post");
 				apiCall.Parameters.Add("postId", post.Id.ToString());
 				return await ChangePostAsync(apiCall, 
 					(originalPost, isAdmin) =>
@@ -920,11 +1119,16 @@ namespace SGAPI
 			catch(Exception ex)
 			{
 				Log(ex);
-				return new ApiError("updatePost failed.");
+				return ApiError.ServerError(ex.Message);
 			}
 		}
 
 		/* deletePost(tokenId, postId) -> Success */
+		/*
+			Requirements:
+				Token: Yes
+				User Role: User and post.OwnerId == token.User.Id | Admin
+		 */	
 		private async Task<ApiResult> deletePost(ApiCall apiCall)
 		{
 			return await ChangePostAsync(apiCall, (post, isAdmin) => 
@@ -933,10 +1137,16 @@ namespace SGAPI
 				post.Body = "This post has beed deleted";
 				post.UserId = null;
 				post.RoleToEdit = UserRole.Admin;
+				post.RoleToRead = UserRole.Guest;
 			});
 		}
 
 		/* hidePost(tokenId, postId) -> Success */
+		/*
+			Requirements:
+				Token: Yes
+				User Role: Admin
+		 */	
 		private async Task<ApiResult> hidePost(ApiCall apiCall)
 		{
 			return await ChangePostAsync(apiCall, (post, isAdmin) => 
@@ -948,6 +1158,11 @@ namespace SGAPI
 		}
 
 		/* unhidePost(tokenId, postId) -> Success */
+		/*
+			Requirements:
+				Token: Yes
+				User Role: Admin
+		 */	
 		private async Task<ApiResult> unhidePost(ApiCall apiCall)
 		{
 			return await ChangePostAsync(apiCall, (post, isAdmin) => 

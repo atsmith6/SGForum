@@ -54,7 +54,9 @@ namespace SGDataModel
 			topic.RoleToRead = rawRole;
 			topic.ParentId = parentId;
 			topic.IsRootEntry = parentId == null;
-			topic.Modified = DateTime.UtcNow;
+			var now = DateTime.UtcNow;
+			topic.Modified = now;
+			topic.Created = now;
 			topic.Owner = randomUserWithRole(users, UserRole.User);
 			return topic;
 		}

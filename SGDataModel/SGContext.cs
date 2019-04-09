@@ -83,15 +83,18 @@ namespace SGDataModel
 			var adminUser = task.Result;
 			SaveChanges();
 
+			var now = DateTime.UtcNow;
+
 			var rootTopic = new Topic()
 			{
 				Title = "Root Topic",
 				RoleToRead = UserRole.Guest,
 				RoleToEdit = UserRole.Admin,
-				IsRootEntry = true
+				IsRootEntry = true,
+				Modified = now,
+				Created = now
 			};
 
-			var now = DateTime.UtcNow;
 			var rootPost = new Post()
 			{
 				Parent = rootTopic,
