@@ -91,11 +91,13 @@ namespace SGDataModel
 			return JsonConvert.DeserializeObject<ApiError>(json);
 		}
 
-		public static ApiError AuthenticationFailure() { return new ApiError("Authentication failure"); }
-		public static ApiError InvalidToken() { return new ApiError("Invalid login token"); }
-		public static ApiError InvalidParam(string param) { return new ApiError($"Invalid parameter: {param}"); }
-		public static ApiError NotFound() { return new ApiError("Not found"); }
-		public static ApiError ServerError(string message) { return new ApiError($"Server exception: {message}"); }
-		public static ApiError Unauthorised() { return new ApiError("Unauthorised"); }
+		public static ApiError ApiFunctionNotFound(string funcName) { return new ApiError($"Api Function {funcName} Not Found", 400); }
+		public static ApiError AuthenticationFailure() { return new ApiError("Authentication failure", 400); }
+		public static ApiError BadServerApiImplementation(string funcName) { return new ApiError($"There is a problem with the Api interface on the server for {funcName}.", 500); }
+		public static ApiError InvalidToken() { return new ApiError("Invalid login token", 400); }
+		public static ApiError InvalidParam(string param) { return new ApiError($"Invalid parameter: {param}", 400); }
+		public static ApiError NotFound() { return new ApiError("Not found", 400); }
+		public static ApiError ServerError(string message) { return new ApiError($"Server exception: {message}", 500); }
+		public static ApiError Unauthorised() { return new ApiError("Unauthorised", 400); }
 	} 
 }

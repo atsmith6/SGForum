@@ -21,5 +21,17 @@ namespace SGDataModel
 
 		[Required]
 		public int RootTopicId { get; set; }
+
+		public DatabaseInfo CloneForExport()
+		{
+			var ret = new DatabaseInfo();
+			ret.Id = Id;
+			ret.MajVersion = MajVersion;
+			ret.MinVersion = MinVersion;
+			ret.ForumTitle = ForumTitle;
+			ret.ForumLogo = ForumLogo;
+			ret.RootTopicId = RootTopicId;
+			return ret;
+		}
     }
 }

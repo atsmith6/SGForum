@@ -48,7 +48,7 @@ namespace SGAPI.Controllers
 						var apiCall = ApiCall.FromJson(jsonText);
 
 						var handler = new ApiHandler(_context);
-						var result = await handler.processCallAsync(apiCall);
+						var result = await handler.AutoProcessAsync(apiCall);
 						if (result is ApiError)
 							return processExit(result, (result as ApiError).HttpStatusCode);
 						else

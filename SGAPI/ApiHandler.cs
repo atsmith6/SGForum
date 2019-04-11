@@ -11,64 +11,18 @@ using System.Text;
 
 namespace SGAPI
 {
-    public class ApiHandler
+    public class ApiHandler : AutoApi
     {
 		private SGContext _context;
 
-        public ApiHandler(SGContext context)
+        public ApiHandler(SGContext context) : base()
 		{
 			_context = context;
 		}
 
 		public async Task<ApiResult> processCallAsync(ApiCall apiCall)
 		{
-			try
-			{
-				if (apiCall == null)
-					throw new Exception("Invalid API call.");
-				if (string.IsNullOrEmpty(apiCall.Func))
-					throw new Exception("Invalid API call.  Function name null or empty.");
-
-				var func = apiCall.Func.Trim();			
-				switch(func)
-				{
-					case "getDbInfo": return await getDBInfo(apiCall); 
-					case "login": return await login(apiCall);
-					case "logout": return await logout(apiCall);
-					case "getToken": return await getToken(apiCall);
-
-					case "createUser": return await createUser(apiCall);
-					case "getUser": return await getUser(apiCall);
-					case "getUsers": return await getUsers(apiCall);
-					case "updateUser": return await updateUser(apiCall);
-					case "updatePassword": return await updatePassword(apiCall);
-					case "activateUser": return await activateUser(apiCall);
-					case "deactivateUser": return await deactivateUser(apiCall);
-
-					case "getTopic": return await getTopic(apiCall);
-					case "getTopics": return await getTopics(apiCall);
-					case "getTopicPage": return await getTopicPage(apiCall);
-					case "createTopic": return await createTopic(apiCall);
-					case "updateTopic": return await updateTopic(apiCall);
-					case "deleteTopic": return await deleteTopic(apiCall);
-
-					case "getPosts": return await getPosts(apiCall);
-					case "getPostPage": return await getPostPage(apiCall);
-					case "getPost": return await getPost(apiCall);
-					case "createPost": return await createPost(apiCall);
-					case "updatePost": return await updatePost(apiCall);
-					case "deletePost": return await deletePost(apiCall);
-					case "hidePost": return await hidePost(apiCall);
-					case "unhidePost": return await unhidePost(apiCall);
-				}
-
-				throw new Exception($"Unknown API function {func}");
-			}
-			catch(Exception ex)
-			{
-				var ret = ApiError.ServerError(ex.Message);
-				return ret;
-			}
+			return await AutoProcessAsync(apiCall);
 		}
 
 		public ApiResult processCall(ApiCall apiCall)
@@ -96,20 +50,13 @@ namespace SGAPI
 				Token: No
 				User Role: Any
 		 */
-		private async Task<ApiResult> login(ApiCall apiCall)
+		[SGAutoApi]
+		public async Task<LoginToken> login(string email, string password)
 		{
-			var email = apiCall.Parameters.OrNull("email");
-			var password = apiCall.Parameters.OrNull("password");
-			if (string.IsNullOrWhiteSpace(email))
-				return ApiError.InvalidParam("email");
-			if (string.IsNullOrWhiteSpace(password))
-				return ApiError.InvalidParam("password");
 			var token = await LoginTokenTasks.LoginAsync(_context, email, password);
 			if (token == null)
-			{
-				return ApiError.AuthenticationFailure();
-			}
-			return new ApiResult<LoginToken>(StdResult.OK, token);
+				throw AutoApiError.AuthenticationFailure();
+			return token;
 		}
 
 		/* logout(tokenId) -> Success */
@@ -124,50 +71,24 @@ namespace SGAPI
 				Token: Yes
 				User Role: Administrator
 		 */
-		private async Task<ApiResult> logout(ApiCall apiCall)
+		[SGAutoApi]
+		public async Task logout(Int64 tokenId, string email)
 		{
-			try
+			var token = await LoginTokenTasks.GetLoginTokenAsync(_context, tokenId);
+			if (token == null)
+					throw AutoApiError.NotFound();
+			if (email != null)
 			{
-				if (apiCall.Parameters.ContainsKey("email"))
-				{
-					Int64 adminTokenId = -1;
-					string email = apiCall.Parameters.OrNull("email");
-					if (string.IsNullOrWhiteSpace(email))
-						return ApiError.InvalidParam("email");
-					if (Int64.TryParse( apiCall.Parameters.OrNull("adminTokenId"), out adminTokenId))
-					{
-						var token = await LoginTokenTasks.GetLoginTokenAsync(_context, adminTokenId);
-						var userRole = new UserRole(token.User.RawRole);
-						if (!userRole.IsAdmin)
-						{
-							return ApiError.Unauthorised();
-						}
-						if (token != null)
-						{
-							await LoginTokenTasks.LogoutAsync(_context, token, email);
-							return new ApiResult(StdResult.OK);
-						}
-					}
-				}
-				else
-				{
-					Int64 tokenId = 0;
-					if (Int64.TryParse( apiCall.Parameters.OrNull("tokenId"), out tokenId))
-					{
-						var token = await LoginTokenTasks.GetLoginTokenAsync(_context, tokenId);
-						if (token != null)
-						{
-							await LoginTokenTasks.LogoutAsync(_context, token);
-							return new ApiResult(StdResult.OK);
-						}
-					}
-				}
-				return ApiError.InvalidToken();
+				if (string.IsNullOrWhiteSpace(email))
+					throw AutoApiError.InvalidParam("email");
+				var userRole = new UserRole(token.User.RawRole);
+				if (!userRole.IsAdmin)
+					throw AutoApiError.Unauthorised();
+				await LoginTokenTasks.LogoutAsync(_context, token, email);
 			}
-			catch(Exception ex)
+			else
 			{
-				Log(ex);
-				return ApiError.ServerError(ex.Message);
+				await LoginTokenTasks.LogoutAsync(_context, token);
 			}
 		}
 
@@ -177,35 +98,19 @@ namespace SGAPI
 				Token: No (only ID)
 				User Role: Guest | User | Administrator
 		 */
-		private async Task<ApiResult> getToken(ApiCall apiCall)
+		[SGAutoApi]
+		public async Task<LoginToken> getToken(Int64 tokenId)
 		{
-			try
-			{
-				if (!apiCall.Parameters.ContainsKey("tokenId"))
-					throw new Exception("getToken missing parameter tokenId");
+			LoginToken token;
+			if (tokenId == LoginToken.AnonymousLoginId)
+				token = LoginTokenTasks.GetAnonmymousToken();
+			else
+				token = await LoginTokenTasks.GetLoginTokenAsync(_context, tokenId);
 
-				Int64 tokenId;
-				if (Int64.TryParse(apiCall.Parameters.OrNull("tokenId"), out tokenId))
-				{
-					LoginToken token;
-					if (tokenId == LoginToken.AnonymousLoginId)
-						token = LoginTokenTasks.GetAnonmymousToken();
-					else
-						token = await LoginTokenTasks.GetLoginTokenAsync(_context, tokenId);
+			if (token == null)
+				throw AutoApiError.InvalidToken();
 
-					if (token == null)
-						return ApiError.InvalidToken();
-
-					var result = new ApiResult<LoginToken>(StdResult.OK, token);
-					return result;
-				}
-				return ApiError.InvalidToken();
-			}
-			catch(Exception ex)
-			{
-				Log(ex);
-				return ApiError.ServerError(ex.Message);
-			}
+			return token.CloneForExport();
 		}
 
 		/* getDbInfo() -> DatabaseInfo */
@@ -214,20 +119,13 @@ namespace SGAPI
 				Token: No
 				User Role: Any
 		 */
-		private async Task<ApiResult> getDBInfo(ApiCall apiCall)
+		[SGAutoApi]
+		public async Task<DatabaseInfo> getDBInfo()
 		{
-			try
-			{
-				var info = await _context.databaseInfo.FirstAsync();
-				if (info != null)
-					return new ApiResult<DatabaseInfo>(StdResult.OK, info);
-				return ApiError.NotFound();
-			}
-			catch(Exception ex)
-			{
-				Log(ex);
-				return ApiError.ServerError(ex.Message);
-			}
+			var info = await _context.databaseInfo.FirstAsync();
+			if (info == null)
+				throw new AutoApiError("Failed to retrieve the database info");
+			return info.CloneForExport();
 		}
 
 		private async Task<LoginToken> quickGetToken(ApiCall apiCall, bool allowAnon = false)
@@ -249,42 +147,50 @@ namespace SGAPI
 			return null;
 		}
 
+		private async Task<LoginToken> quickGetToken(Int64 tokenId, bool allowAnon = false)
+		{
+			if (tokenId == LoginToken.AnonymousLoginId && allowAnon)
+				return LoginTokenTasks.GetAnonmymousToken();
+			var token = await LoginTokenTasks.GetLoginTokenAsync(_context, tokenId);
+			if (token.User.Active)
+				return token;
+			throw AutoApiError.InvalidToken();
+		}
+
 		/* createUser(tokenId, email, displayName, password, role) -> User */
 		/*
 			Requirements:
 				Token: Yes
 				User Role: Administrator
 		 */
-		private async Task<ApiResult> createUser(ApiCall apiCall)
+		[SGAutoApi]
+		public async Task<User> createUser(Int64 tokenId, string email, string displayName, string password, int role)
 		{
+			var token = await quickGetToken(tokenId);
+
+			var userRole = new UserRole(token.User.RawRole);
+			if (!userRole.IsAdmin)
+				throw AutoApiError.Unauthorised();
+			
+			if (string.IsNullOrWhiteSpace(email))
+				throw AutoApiError.InvalidParam("email");
+			if (string.IsNullOrWhiteSpace(password))
+				throw AutoApiError.InvalidParam("password");
+			
+			if (!UserRole.RoleIsValid(role))
+				throw AutoApiError.InvalidParam("role");
 			try
 			{
-				var token = await quickGetToken(apiCall);
-				if (token == null)
-					return ApiError.InvalidToken();
-				var userRole = new UserRole(token.User.RawRole);
-				if (!userRole.IsAdmin)
-					return ApiError.Unauthorised();
-				var email = apiCall.Parameters.OrNull("email");
-				if (string.IsNullOrWhiteSpace(email))
-					return ApiError.InvalidParam("email");
-				var displayname = apiCall.Parameters.OrNull("displayName") ?? "";
-				var password = apiCall.Parameters["password"];
-				if (string.IsNullOrWhiteSpace(password))
-					return ApiError.InvalidParam("password");
-				int roleRaw = 0;
-				if (!int.TryParse(apiCall.Parameters.OrNull("role"), out roleRaw) ||
-					!UserRole.RoleIsValid(roleRaw))
-					return ApiError.InvalidParam("role");
-				var user = await UserTasks.CreateUserAsync(_context, token, email, displayname, password, roleRaw);
+				var user = await UserTasks.CreateUserAsync(_context, token, email, displayName, password, role);
 				if (user == null)
-					return new ApiError("Create user failed unexpectedly.");
-				return new ApiResult<User>(StdResult.OK, user);
+					throw AutoApiError.ServerError("Create user failed unexpectedly.");
+				return user.CloneForExport();
 			}
-			catch(Exception ex)
+			catch (Exception ex)
 			{
-				Log(ex);
-				return ApiError.ServerError(ex.Message);
+				if (ex.Message == "Unauthorised")
+					throw AutoApiError.Unauthorised();
+				throw;
 			}
 		}
 
@@ -294,34 +200,21 @@ namespace SGAPI
 				Token: Yes
 				User Role: Administrator if userId != token.User.Id | User
 		 */
-		private async Task<ApiResult> getUser(ApiCall apiCall)
+		[SGAutoApi]
+		public async Task<User> getUser(Int64 tokenId, int userId)
 		{
-			try
-			{
-				var token = await quickGetToken(apiCall);
-				if (token == null)
-					return ApiError.InvalidToken();
+			var token = await quickGetToken(tokenId);
 
-				int userId = 0;
-				if (!int.TryParse(apiCall.Parameters.OrNull("userId"), out userId))
-					return ApiError.InvalidParam("userId"); 
+			UserRole role = new UserRole(token.User.RawRole);
+			if (!(role.IsAdmin || token.UserId == userId))
+				throw AutoApiError.Unauthorised(); 
 
-				UserRole role = new UserRole( token.User.RawRole );
-				if (!(role.IsAdmin || token.UserId == userId))
-					return ApiError.Unauthorised(); 
+			var user = await (from u in _context.users where u.Id == userId select u).FirstOrDefaultAsync();
+			if (user == null)
+				throw AutoApiError.NotFound();
 
-				var user = await (from u in _context.users where u.Id == userId select u).FirstOrDefaultAsync();
-				if (user == null)
-					return ApiError.NotFound();
-				
-				user = user.CloneForExport();
-				return new ApiResult<User>(StdResult.OK, user);
-			}
-			catch(Exception ex)
-			{
-				Log(ex);
-				return new ApiError("Internal Server Error");
-			}
+			user = user.CloneForExport();
+			return user;
 		}
 
 		/* getUsers(tokenId) */
@@ -330,28 +223,20 @@ namespace SGAPI
 				Token: Yes
 				User Role: Administrator
 		 */
-		private async Task<ApiResult> getUsers(ApiCall apiCall)
+		[SGAutoApi]
+		public async Task<List<User>> getUsers(Int64 tokenId)
 		{
-			try
+			var token = await quickGetToken(tokenId);
+			
+			var role = new UserRole(token.User.RawRole);
+			if (!role.IsAdmin)
+				throw AutoApiError.Unauthorised();
+			var users = await (from u in _context.users select u).ToListAsync();
+			for(int i = 0; i < users.Count; ++i)
 			{
-				var token = await quickGetToken(apiCall);
-				if (token == null)
-					return ApiError.InvalidToken();
-				var role = new UserRole(token.User.RawRole);
-				if (!role.IsAdmin)
-					return ApiError.Unauthorised();
-				var users = await (from u in _context.users select u).ToListAsync();
-				for(int i = 0; i < users.Count; ++i)
-				{
-					users[i] = users[i].CloneForExport();
-				}
-				return new ApiResult<List<User>>(StdResult.OK, users);
+				users[i] = users[i].CloneForExport();
 			}
-			catch(Exception ex)
-			{
-				Log(ex);
-				return ApiError.ServerError(ex.Message);
-			}
+			return users;
 		}
 
 		/* updateUser(tokenId, User) -> Success */
@@ -360,39 +245,18 @@ namespace SGAPI
 				Token: Yes
 				User Role: Administrator if userId != token.User.Id | User
 		 */
-		private async Task<ApiResult> updateUser(ApiCall apiCall)
+		[SGAutoApi]
+		public async Task updateUser(Int64 tokenId, User user)
 		{
-			try
+			var token = await quickGetToken(tokenId);
+
+			if (token.UserId != user.Id)
 			{
-				var token = await quickGetToken(apiCall);
-				if (token == null)
-					return ApiError.InvalidToken();
-				var userJson = apiCall.Parameters.OrNull("User");
-				if (string.IsNullOrWhiteSpace(userJson))
-					return ApiError.InvalidParam("User");
-				User user;
-				try
-				{
-					user = JsonConvert.DeserializeObject<User>(userJson);
-				}
-				catch
-				{
-					return ApiError.InvalidParam("User");
-				}
-				if (token.UserId != user.Id)
-				{
-					var userRole = new UserRole(token.User.RawRole);
-					if (!userRole.IsAdmin)
-						return ApiError.Unauthorised();
-				}
-				await UserTasks.UpdateUserAsync(_context, token, user);
-				return new ApiResult(StdResult.OK);
+				var userRole = new UserRole(token.User.RawRole);
+				if (!userRole.IsAdmin)
+					throw AutoApiError.Unauthorised();
 			}
-			catch(Exception ex)
-			{
-				Log(ex);
-				return ApiError.ServerError(ex.Message);
-			}
+			await UserTasks.UpdateUserAsync(_context, token, user);
 		}
 
 		/* updatePassword(email, oldPassword, newPassword) -> Success */
@@ -402,53 +266,34 @@ namespace SGAPI
 				User Role: Any
 				Password: Yes
 		 */
-		private async Task<ApiResult> updatePassword(ApiCall apiCall)
+		[SGAutoApi]
+		public async Task updatePassword(string email, string oldPassword, string newPassword)
 		{
-			try
-			{
-				var email = apiCall.Parameters.OrNull("email");
-				if (string.IsNullOrWhiteSpace(email))
-					return ApiError.InvalidParam("email");
-				var oldPassword = apiCall.Parameters.OrNull("oldPassword");
-				if (string.IsNullOrWhiteSpace(oldPassword))
-					return ApiError.InvalidParam("oldPassword");
-				var newPassword = apiCall.Parameters.OrNull("newPassword");
-				if (string.IsNullOrWhiteSpace(newPassword))
-					return ApiError.InvalidParam("newPassword");
+			if (string.IsNullOrWhiteSpace(email))
+				throw AutoApiError.InvalidParam("email");
+			
+			if (string.IsNullOrWhiteSpace(oldPassword))
+				throw AutoApiError.InvalidParam("oldPassword");
+			
+			if (string.IsNullOrWhiteSpace(newPassword))
+				throw AutoApiError.InvalidParam("newPassword");
 
-				await UserTasks.UpdatePasswordAsync(_context, email, oldPassword, newPassword);
-
-				return new ApiResult(StdResult.OK);
-			}
-			catch(Exception ex)
-			{
-				Log(ex);
-				return ApiError.ServerError(ex.Message);
-			}
+			await UserTasks.UpdatePasswordAsync(_context, email, oldPassword, newPassword);
 		}
 
-		private async Task<ApiResult> activateUser_Impl(ApiCall apiCall, bool active)
+		private async Task<ApiResult> activateUser_Impl(Int64 tokenId, string email, bool active)
 		{
-			try
-			{
-				var token = await quickGetToken(apiCall);
-				if (token == null)
-					return ApiError.InvalidToken();
-				var userRole = new UserRole(token.User.RawRole);
-				if (!userRole.IsAdmin)
-					return ApiError.Unauthorised();
-				var email = apiCall.Parameters.OrNull("email");
-				if (string.IsNullOrWhiteSpace(email))
-					return ApiError.InvalidParam("email");
+			var token = await quickGetToken(tokenId);
 
-				await UserTasks.SetUserActiveAsync(_context, token, email, active);
-				return new ApiError(StdResult.OK);
-			}
-			catch(Exception ex)
-			{
-				Log(ex);
-				return ApiError.ServerError(ex.Message);
-			}
+			var userRole = new UserRole(token.User.RawRole);
+			if (!userRole.IsAdmin)
+				throw AutoApiError.Unauthorised();
+
+			if (string.IsNullOrWhiteSpace(email))
+				throw AutoApiError.InvalidParam("email");
+
+			await UserTasks.SetUserActiveAsync(_context, token, email, active);
+			return new ApiResult(StdResult.OK);
 		}
 
 		/* activateUser(tokenId, email) */
@@ -457,9 +302,10 @@ namespace SGAPI
 				Token: Yes
 				User Role: Administrator
 		 */
-		private async Task<ApiResult> activateUser(ApiCall apiCall)
+		[SGAutoApi]
+		public async Task<ApiResult> activateUser(Int64 tokenId, string email)
 		{
-			return await activateUser_Impl(apiCall, true);
+			return await activateUser_Impl(tokenId, email, true);
 		}
 
 		/* deactivateUser(tokenId, email) */
@@ -468,9 +314,10 @@ namespace SGAPI
 				Token: Yes
 				User Role: Administrator
 		 */
-		private async Task<ApiResult> deactivateUser(ApiCall apiCall)
+		[SGAutoApi]
+		public async Task<ApiResult> deactivateUser(Int64 tokenId, string email)
 		{
-			return await activateUser_Impl(apiCall, false);
+			return await activateUser_Impl(tokenId, email, false);
 		}
 
 		/* getTopic(tokenId, topicId) -> Topic */
@@ -479,37 +326,25 @@ namespace SGAPI
 				Token: Yes
 				User Role: >= topic.RoleToRead
 		 */
-		private async Task<ApiResult> getTopic(ApiCall apiCall)
+		[SGAutoApi]
+		public async Task<Topic> getTopic(Int64 tokenId, int topicId)
 		{
-			try
-			{
-				var token = await quickGetToken(apiCall, true);
-				if (token == null)
-					return ApiError.InvalidToken();
-				var topicId = apiCall.Parameters.IntOrNull("topicId");
-				if (topicId == null)
-					return ApiError.InvalidParam("topicId");
+				var token = await quickGetToken(tokenId, true);
 
 				Topic topic = await (from t in _context.topics
-					where t.Id == topicId.Value
+					where t.Id == topicId
 					select t).FirstOrDefaultAsync();
 
 				if (topic != null)
 				{
 					int tokenRole = token.User.RawRole;
 					if (topic.RoleToRead > tokenRole)
-						return ApiError.Unauthorised();
+						throw AutoApiError.Unauthorised();
 
-					return new ApiResult<Topic>(StdResult.OK, topic.CloneForExport());
+					return topic.CloneForExport();
 				}
 
-				return ApiError.NotFound();
-			}
-			catch(Exception ex)
-			{
-				Log(ex);
-				return ApiError.ServerError(ex.Message);
-			}
+				throw AutoApiError.NotFound();
 		}
 
 		/* getTopics(tokenId) */
@@ -524,189 +359,151 @@ namespace SGAPI
 				Token: Yes
 				User Role: >= topic.RoleToRead
 		 */
-		private async Task<ApiResult> getTopics(ApiCall apiCall)
+		[SGAutoApi]
+		public async Task<TopicResult> getTopics(Int64 tokenId, int? parentTopicId)
 		{
-			try
+			var token = await quickGetToken(tokenId, true);
+			
+			List<Topic> topics;
+			int tokenRole = token.User.RawRole;
+			var parentId = parentTopicId;
+			if (parentId != null)
 			{
-				var token = await quickGetToken(apiCall, true);
-				if (token == null)
-					return ApiError.InvalidToken();
-				List<Topic> topics;
-				int tokenRole = token.User.RawRole;
-				var parentId = apiCall.Parameters.IntOrNull("parentTopicId");
-				if (parentId != null)
-				{
-					topics = await (from t in _context.topics 
-						where t.ParentId == parentId && t.IsRootEntry == false && t.RoleToRead <= tokenRole 
-						select t).ToListAsync();
-				}
-				else
-				{
-					topics = await (from t in _context.topics 
-						where t.ParentId == null && t.IsRootEntry == true && t.RoleToRead <= tokenRole 
-						select t).ToListAsync();
-				}
-				TopicResult ret = new TopicResult();
-
-				for(int i = 0; i < topics.Count; ++i)
-				{
-					ret.Topics.Add( topics[i].CloneForExport() );
-				}
-
-				ret.TopicCount = ret.Topics.Count;
-
-				if (parentId != null)
-					ret.ParentList = await TopicTasks.CreateParentList(_context, parentId.Value);
-				return new ApiResult<TopicResult>(StdResult.OK, ret);
+				topics = await (from t in _context.topics 
+					where t.ParentId == parentId && t.IsRootEntry == false && t.RoleToRead <= tokenRole 
+					select t).ToListAsync();
 			}
-			catch(Exception ex)
+			else
 			{
-				Log(ex);
-				return ApiError.ServerError(ex.Message);
+				topics = await (from t in _context.topics 
+					where t.ParentId == null && t.IsRootEntry == true && t.RoleToRead <= tokenRole 
+					select t).ToListAsync();
 			}
+			TopicResult ret = new TopicResult();
+
+			for(int i = 0; i < topics.Count; ++i)
+			{
+				ret.Topics.Add( topics[i].CloneForExport() );
+			}
+
+			ret.TopicCount = ret.Topics.Count;
+
+			if (parentId != null)
+				ret.ParentList = await TopicTasks.CreateParentList(_context, parentId.Value);
+			return ret;
 		}
 			
-		/*	getTopicPage(tokenId, page, pageSize) -> TokenResult */
-		/*	getTopicPage(tokenId, parentTopicId, page, pageSize) -> TokenResult */
+		/*	getTopicPage(tokenId, parentTopicId?, page, pageSize) -> TokenResult */
 		/*	Note: page -1 defaults to 0, order is descending... */
 		/*
 			Requirements:
 				Token: No
 				User Role: >= topic.RoleToRead
 		 */	
-		private async Task<ApiResult> getTopicPage(ApiCall apiCall)
+		[SGAutoApi]
+		public async Task<TopicResult> getTopicPage(Int64 tokenId, int? parentTopicId, int page, int pageSize)
 		{
-			try
+			var token = await quickGetToken(tokenId, true);
+
+			var parentId = parentTopicId;
+			
+			if (page == -1)
+				page = 0;
+
+			int count;
+			if (parentId == null)
+				count = await (from t in _context.topics 
+					where t.ParentId == null && t.RoleToRead <= token.User.RawRole 
+					select t).CountAsync();
+			else
+				count = await (from t in _context.topics
+					where t.ParentId == parentId.Value && t.RoleToRead <= token.User.RawRole
+					select t).CountAsync();
+			var pageCount = count / pageSize;
+			if (count % pageSize != 0)
+				++pageCount;
+			if (page >= pageCount)
+				page = Math.Max(0, pageCount - 1);
+
+			int begin = (page) * pageSize;
+
+			IQueryable<Topic> query;
+			if (parentId == null)
+				query = (from t in _context.topics
+					where t.ParentId == null && t.RoleToRead <= token.User.RawRole
+					orderby t.Modified descending
+					select t);
+			else
+				query = (from t in _context.topics
+					where t.ParentId == parentId.Value && t.RoleToRead <= token.User.RawRole
+					orderby t.Modified descending
+					select t);
+			var topics = await query.Skip(begin).Take(pageSize).ToListAsync();
+
+			var topicData = new TopicResult();
+			if (parentId != null)
+				topicData.ParentList = await TopicTasks.CreateParentList(_context, parentId.Value);
+			foreach(var topic in topics)
 			{
-				var token = await quickGetToken(apiCall, true);
-				if (token == null)
-					return ApiError.InvalidToken();
-
-				var parentId = apiCall.Parameters.IntOrNull("parentTopicId");
-				var page = apiCall.Parameters.IntOrNull("page");
-				var pageSize = apiCall.Parameters.IntOrNull("pageSize");
-				if (page == null)
-					return ApiError.InvalidParam("page");
-				if (pageSize == null)
-					return ApiError.InvalidParam("pageSize");
-				if (page.Value == -1)
-					page = 0;
-
-				int count;
-				if (parentId == null)
-					count = await (from t in _context.topics 
-						where t.ParentId == null && t.RoleToRead <= token.User.RawRole 
-						select t).CountAsync();
-				else
-					count = await (from t in _context.topics
-						where t.ParentId == parentId.Value && t.RoleToRead <= token.User.RawRole
-						select t).CountAsync();
-				var pageCount = count / pageSize.Value;
-				if (count % pageSize != 0)
-					++pageCount;
-				if (page.Value >= pageCount)
-					page = Math.Max(0, pageCount - 1);
-
-				int begin = (page.Value) * pageSize.Value;
-
-				IQueryable<Topic> query;
-				if (parentId == null)
-					query = (from t in _context.topics
-						where t.ParentId == null && t.RoleToRead <= token.User.RawRole
-						orderby t.Modified descending
-						select t);
-				else
-					query = (from t in _context.topics
-						where t.ParentId == parentId.Value && t.RoleToRead <= token.User.RawRole
-						orderby t.Modified descending
-						select t);
-				var topics = await query.Skip(begin).Take(pageSize.Value).ToListAsync();
-
-				var topicData = new TopicResult();
-				if (parentId != null)
-					topicData.ParentList = await TopicTasks.CreateParentList(_context, parentId.Value);
-				foreach(var topic in topics)
-				{
-					topicData.Topics.Add(topic.CloneForExport());
-				}
-				topicData.TopicCount = count;
-				topicData.CurrentPage = page.Value;
-				topicData.PageCount = pageCount;
-				return new ApiResult<TopicResult>(StdResult.OK, topicData);
+				topicData.Topics.Add(topic.CloneForExport());
 			}
-			catch(Exception ex)
-			{
-				Log(ex);
-				return ApiError.ServerError(ex.Message);
-			}
+			topicData.TopicCount = count;
+			topicData.CurrentPage = page;
+			topicData.PageCount = pageCount;
+			return topicData;
 		}
 
-		/* createTopic(loginId, title, roleToEdit, roleToRead) */
-		/* createTopic(loginId, parentTopicId, title, roleToEdit, roleToRead) */
+		/* createTopic(tokenId, title, roleToEdit, roleToRead) */
+		/* createTopic(tokenId, parentTopicId, title, roleToEdit, roleToRead) */
 		/*
 			Requirements:
 				Token: Yes
 				User Role: >= topic.Parent.RoleToEdit | Admin for root topics
 		 */	
-
-		private async Task<ApiResult> createTopic(ApiCall apiCall)
+		[SGAutoApi]
+		public async Task<Topic> createTopic(Int64 tokenId, int? parentTopicId, string title, int roleToEdit, int roleToRead)
 		{
-			try
+			var token = await quickGetToken(tokenId);
+
+			var userRole = new UserRole(token.User.RawRole);
+			if (parentTopicId == null)  //Only administators can edit the root topic level.
 			{
-				var token = await quickGetToken(apiCall);
-				if (token == null)
-					return ApiError.InvalidToken();
-
-				var parentTopicId = apiCall.Parameters.IntOrNull("parentTopicId");
-				var userRole = new UserRole(token.User.RawRole);
-				if (parentTopicId == null)  //Only administators can edit the root topic.
-				{
-					if (!userRole.IsAdmin)
-						return ApiError.Unauthorised();
-				}
-				else
-				{
-					var parentTopic = await(from t in _context.topics
-						where t.Id == parentTopicId.Value
-						select t).FirstOrDefaultAsync();
-					if (parentTopic == null)
-						return ApiError.NotFound();
-					if (parentTopic.RoleToEdit > token.User.RawRole)
-						return ApiError.Unauthorised();
-				}
-
-				var title = apiCall.Parameters.OrNull("title");
-				var roleToEdit = apiCall.Parameters.IntOrNull("roleToEdit");
-				var roleToRead = apiCall.Parameters.IntOrNull("roleToRead");
-				
-				if (title == null)
-					return ApiError.InvalidParam("title.");
-				if (roleToEdit == null)
-					return ApiError.InvalidParam("roleToEdit.");
-				if (roleToRead == null)
-					return ApiError.InvalidParam("roleToRead.");
-				if (roleToRead.Value > token.User.RawRole)
-					return new ApiError("The topic would be unreadable by its creator.");
-				var topic = new Topic();
-				topic.Title = title;
-				topic.RoleToEdit = roleToEdit.Value;
-				topic.RoleToRead = roleToRead.Value;
-				topic.ParentId = parentTopicId;
-				topic.IsRootEntry = parentTopicId == null;
-				topic.OwnerId = token.UserId;
-				var now = DateTime.UtcNow;
-				topic.Modified = now;
-				topic.Created = now;
-				_context.topics.Add(topic);
-				await _context.SaveChangesAsync();
-
-				return new ApiResult<Topic>(StdResult.OK, topic.CloneForExport());
+				if (!userRole.IsAdmin)
+					throw AutoApiError.Unauthorised();
 			}
-			catch(Exception ex)
+			else
 			{
-				Log(ex);
-				return ApiError.ServerError(ex.Message);
+				var parentTopic = await(from t in _context.topics
+					where t.Id == parentTopicId.Value
+					select t).FirstOrDefaultAsync();
+				if (parentTopic == null)
+					throw AutoApiError.NotFound();
+				if (parentTopic.RoleToEdit > token.User.RawRole)
+					throw AutoApiError.Unauthorised();
 			}
+
+			if (title == null)
+				throw AutoApiError.InvalidParam("title.");
+			if (!UserRole.RoleIsValid(roleToEdit))
+				throw AutoApiError.InvalidRole("roleToEdit.");
+			if (!UserRole.RoleIsValid(roleToRead))
+				throw AutoApiError.InvalidParam("roleToRead.");
+			if (roleToRead > token.User.RawRole)
+				throw new AutoApiError("The topic would be unreadable by its creator.");
+			var topic = new Topic();
+			topic.Title = title;
+			topic.RoleToEdit = roleToEdit;
+			topic.RoleToRead = roleToRead;
+			topic.ParentId = parentTopicId;
+			topic.IsRootEntry = parentTopicId == null;
+			topic.OwnerId = token.UserId;
+			var now = DateTime.UtcNow;
+			topic.Modified = now;
+			topic.Created = now;
+			_context.topics.Add(topic);
+			await _context.SaveChangesAsync();
+
+			return topic.CloneForExport();
 		}
 
 		/* updateTopic(tokenId, Topic) */
@@ -714,37 +511,28 @@ namespace SGAPI
 			Requirements:
 				Token: Yes
 				User Role: If User then topic.OwnerId == token.User.Id | Admin
-		 */	
-		private async Task<ApiResult> updateTopic(ApiCall apiCall)
+		 */
+		[SGAutoApi]
+		public async Task updateTopic(Int64 tokenId, Topic Topic)
 		{
-			try
-			{
-				var token = await quickGetToken(apiCall);
-				if (token == null)
-					return ApiError.InvalidToken();
-				var topic = apiCall.Parameters.FromJson<Topic>("Topic");
+			var token = await quickGetToken(tokenId);
 
-				var originalTopic = await (from t in _context.topics
-					where t.Id == topic.Id
-					select t).FirstOrDefaultAsync();
-				if (originalTopic == null)
-					return ApiError.NotFound();
-				var role = new UserRole(token.User.RawRole);
-				var canUpdate = (role.IsAdmin || (originalTopic.OwnerId != null && originalTopic.OwnerId.Value == token.UserId));
-				if (!canUpdate)
-					return ApiError.Unauthorised();
-				originalTopic.Title = topic.Title;
-				originalTopic.RoleToEdit = topic.RoleToEdit;
-				originalTopic.RoleToRead = topic.RoleToRead;
-				_context.topics.Update(originalTopic);
-				await _context.SaveChangesAsync();
-				return new ApiResult(StdResult.OK);
-			}
-			catch(Exception ex)
-			{
-				Log(ex);
-				return ApiError.ServerError(ex.Message);
-			}
+			var topic = Topic;
+
+			var originalTopic = await (from t in _context.topics
+				where t.Id == topic.Id
+				select t).FirstOrDefaultAsync();
+			if (originalTopic == null)
+				throw AutoApiError.NotFound();
+			var role = new UserRole(token.User.RawRole);
+			var canUpdate = (role.IsAdmin || (originalTopic.OwnerId != null && originalTopic.OwnerId.Value == token.UserId));
+			if (!canUpdate)
+				throw AutoApiError.Unauthorised();
+			originalTopic.Title = topic.Title;
+			originalTopic.RoleToEdit = topic.RoleToEdit;
+			originalTopic.RoleToRead = topic.RoleToRead;
+			_context.topics.Update(originalTopic);
+			await _context.SaveChangesAsync();
 		}
 
 		/* deleteTopic(tokenId, topicId) -> Success */
@@ -753,65 +541,51 @@ namespace SGAPI
 				Token: Yes
 				User Role: Admin
 		 */	
-		private async Task<ApiResult> deleteTopic(ApiCall apiCall)
+		[SGAutoApi]
+		public async Task deleteTopic(Int64 tokenId, int topicId)
 		{
+			var token = await quickGetToken(tokenId);
+
+			var userRole = new UserRole(token.User.RawRole);
+			if (!userRole.IsAdmin)
+				throw AutoApiError.Unauthorised();
+
+			var topic = await (from t in _context.topics
+				where t.Id == topicId
+				select t).FirstOrDefaultAsync();
+			
+			if (topic == null)
+				throw AutoApiError.NotFound();
+			topic = null;
+
+			/* We use this approach because EF Core doesn't support self-referential cascading. */
+
 			try
 			{
-				var token = await quickGetToken(apiCall);
-				if (token == null)
-					return ApiError.InvalidToken();
+				// Delete the topic itself
+				await _context.Database.BeginTransactionAsync();
+				string sql = "delete from topics where Id = @p0";
+				int rows = await _context.Database.ExecuteSqlCommandAsync(sql, new object[] { topicId });
 
-				var topicId = apiCall.Parameters.IntOrNull("topicId");
-				if (topicId == null)
-					return ApiError.InvalidParam("topicId");
-
-				var userRole = new UserRole(token.User.RawRole);
-				if (!userRole.IsAdmin)
-					return ApiError.Unauthorised();
-
-				var topic = await (from t in _context.topics
-					where t.Id == topicId
-					select t).FirstOrDefaultAsync();
+				// Delete all its children for whom ParentId has now become null, recursively
+				sql = "delete from topics where ParentId is NULL and IsRootEntry = 0";
+				do
+				{
+					rows = await _context.Database.ExecuteSqlCommandAsync(sql, new object[] { topicId });
+				} while(rows > 0);
 				
-				if (topic == null)
-					return ApiError.NotFound();
-				topic = null;
-
-				/* We use this approach because EF Core doesn't support self-referential cascading. */
-
-				try
+				// Delete all the posts that have been orphaned as a result of the above.
+				sql = "delete from posts where ParentId is NULL";
+				do
 				{
-					// Delete the topic itself
-					await _context.Database.BeginTransactionAsync();
-					string sql = "delete from topics where Id = @p0";
-					int rows = await _context.Database.ExecuteSqlCommandAsync(sql, new object[] { topicId });
-
-					// Delete all its children for whom ParentId has now become null, recursively
-					sql = "delete from topics where ParentId is NULL and IsRootEntry = 0";
-					do
-					{
-						rows = await _context.Database.ExecuteSqlCommandAsync(sql, new object[] { topicId });
-					} while(rows > 0);
-					
-					// Delete all the posts that have been orphaned as a result of the above.
-					sql = "delete from posts where ParentId is NULL";
-					do
-					{
-						rows = await _context.Database.ExecuteSqlCommandAsync(sql, new object[] { topicId });
-					} while(rows > 0);
-					_context.Database.CommitTransaction();
-				}
-				catch(Exception ex)
-				{
-					Log(ex.Message);
-					_context.Database.RollbackTransaction();
-				}
-				return new ApiResult(StdResult.OK);
+					rows = await _context.Database.ExecuteSqlCommandAsync(sql, new object[] { topicId });
+				} while(rows > 0);
+				_context.Database.CommitTransaction();
 			}
 			catch(Exception ex)
 			{
-				Log(ex);
-				return ApiError.ServerError(ex.Message);
+				Log(ex.Message);
+				_context.Database.RollbackTransaction();
 			}
 		}
 
@@ -844,42 +618,33 @@ namespace SGAPI
 				User Role: Any
 				Notes: Post where token.User.Id < post.RoleToRead, and hidden posts, are blanked out
 		 */	
-		private async Task<ApiResult> getPosts(ApiCall apiCall)
+		[SGAutoApi]
+		private async Task<List<Post>> getPosts(Int64 tokenId, int parentTopicId)
 		{
-			try
-			{
-				var token = await quickGetToken(apiCall, true);
-				if (token == null)
-					return ApiError.InvalidToken();
-				int tokenRole = token.User.RawRole;
-				var topicId = apiCall.Parameters.IntOrNull("parentTopicId");
-				if (topicId == null)
-					return ApiError.InvalidParam("parentTopicId");
-				var posts = await (from p in _context.posts.Include(p => p.User)
-					where p.ParentId == topicId.Value
-					orderby p.Id descending
-					select p).Include(p => p.User).ToListAsync();
+			var token = await quickGetToken(tokenId, true);
 
-				var role = new UserRole(tokenRole);
-				var ret = new List<Post>();
-				for (int i = 0; i < posts.Count; ++i)
-				{
-					var post = posts[i];
-					if (post.Hidden && !role.IsAdmin)
-						ret.Add(createGenericHiddenPost(post.Id));
-					else if (post.RoleToRead > token.User.RawRole || post.User.Active == false)
-						ret.Add(createGenericRestrictedPost(post.Id));
-					else
-						ret.Add(post.CloneForExport());
-				}
+			int tokenRole = token.User.RawRole;
+			var topicId = parentTopicId;
 
-				return new ApiResult<List<Post>>(StdResult.OK, ret);
-			}
-			catch(Exception ex)
+			var posts = await (from p in _context.posts.Include(p => p.User)
+				where p.ParentId == topicId
+				orderby p.Id descending
+				select p).Include(p => p.User).ToListAsync();
+
+			var role = new UserRole(tokenRole);
+			var ret = new List<Post>();
+			for (int i = 0; i < posts.Count; ++i)
 			{
-				Log(ex);
-				return ApiError.ServerError(ex.Message);
+				var post = posts[i];
+				if (post.Hidden && !role.IsAdmin)
+					ret.Add(createGenericHiddenPost(post.Id));
+				else if (post.RoleToRead > token.User.RawRole || post.User.Active == false)
+					ret.Add(createGenericRestrictedPost(post.Id));
+				else
+					ret.Add(post.CloneForExport());
 			}
+
+			return ret;
 		}
 
 		private void CreatePostExportList(int tokenRole, IEnumerable<Post> posts, List<Post> output)
@@ -906,57 +671,40 @@ namespace SGAPI
 				User Role: Any
 				Notes: Post where token.User.Id < post.RoleToRead, and hidden posts, are blanked out
 		 */	
-		private async Task<ApiResult> getPostPage(ApiCall apiCall)
+		[SGAutoApi]
+		public async Task<PostResult> getPostPage(Int64 tokenId, int parentTopicId, int page, int pageSize)
 		{
-			try
-			{
-				var token = await quickGetToken(apiCall, true);
-				if (token == null)
-					return ApiError.InvalidToken();
-				int tokenRole = token.User.RawRole;
+				var token = await quickGetToken(tokenId, true);
 
-				var parentId = apiCall.Parameters.IntOrNull("parentTopicId");
-				if (parentId == null)
-					return ApiError.InvalidParam("parentTopicId");
-				var page = apiCall.Parameters.IntOrNull("page");
-				if (page == null)
-					return ApiError.InvalidParam("page");
-				var pageSize = apiCall.Parameters.IntOrNull("pageSize");
-				if (pageSize == null)
-					return ApiError.InvalidParam("pageSize");
+				int tokenRole = token.User.RawRole;
+				var parentId = parentTopicId;
 
 				int count = await (from p in _context.posts
-					where p.ParentId == parentId.Value
+					where p.ParentId == parentId
 					select p).CountAsync();
-				var pageCount = count / pageSize.Value;
-				if (count % pageSize.Value != 0)
+				var pageCount = count / pageSize;
+				if (count % pageSize != 0)
 					++pageCount;
 
-				if (page.Value == -1 || page.Value >= pageCount)
+				if (page == -1 || page >= pageCount)
 					page = Math.Max(0, pageCount - 1);
 
-				int begin = (page.Value) * pageSize.Value;
+				int begin = (page) * pageSize;
 
 				IQueryable<Post> query = (from p in _context.posts
-					where p.ParentId == parentId.Value
+					where p.ParentId == parentId
 					orderby p.Created ascending
 					select p);
 
-				var posts = await query.Include(p => p.User).Skip(begin).Take(pageSize.Value).ToListAsync();
+				var posts = await query.Include(p => p.User).Skip(begin).Take(pageSize).ToListAsync();
 
 				var postsResult = new PostResult();
 				postsResult.Count = count;
-				postsResult.CurrentPage = page.Value;
+				postsResult.CurrentPage = page;
 
 				CreatePostExportList(tokenRole, posts, postsResult.Posts);
 
-				return new ApiResult<PostResult>(StdResult.OK, postsResult);
-			}
-			catch(Exception ex)
-			{
-				Log(ex);
-				return ApiError.ServerError(ex.Message);
-			}
+				return postsResult;
 		}
 
 		/* createPost(tokenId, Post) -> Success */
@@ -965,84 +713,62 @@ namespace SGAPI
 				Token: Yes
 				User Role: User and topic.RoleToRead <= token.User.RawRole | Admin
 		 */	
-		private async Task<ApiResult> createPost(ApiCall apiCall)
+		[SGAutoApi]
+		public async Task<Post> createPost(Int64 tokenId, Post Post)
 		{
-			try
-			{
-				var token = await quickGetToken(apiCall);
-				if (token == null)
-					return ApiError.InvalidToken();
+			var token = await quickGetToken(tokenId);
 
-				var postJson = apiCall.Parameters.OrNull("Post");
-				if (string.IsNullOrWhiteSpace(postJson))
-					return ApiError.InvalidParam("Post");
+			var post = Post;
+			post.Id = 0;
+			if (post.UserId != token.UserId)
+				throw AutoApiError.Unauthorised();
 
-				var post = JsonConvert.DeserializeObject<Post>(postJson);
-				post.Id = 0;
-				if (post.UserId != token.UserId)
-					return ApiError.Unauthorised();
-
-				var topicId = post.ParentId;
-				if (topicId == null)
-					return ApiError.InvalidParam("Post.ParentId");
-				var topic = await (from t in _context.topics
-					where t.Id == topicId.Value
-					select t).FirstOrDefaultAsync();
-				if(token.User.RawRole < topic.RoleToEdit)
-					return ApiError.Unauthorised();
-				var now = DateTime.UtcNow;
-				post.Created = now;
-				post.Modified = now;
-				_context.posts.Add(post);
-				await _context.SaveChangesAsync();
-				return new ApiResult<Post>(StdResult.OK, post.CloneForExport());
-			}
-			catch(Exception ex)
-			{
-				Log(ex);
-				return ApiError.ServerError(ex.Message);
-			}
+			var topicId = post.ParentId;
+			if (topicId == null)
+				throw AutoApiError.InvalidParam("Post.ParentId");
+			var topic = await (from t in _context.topics
+				where t.Id == topicId.Value
+				select t).FirstOrDefaultAsync();
+			if(token.User.RawRole < topic.RoleToEdit)
+				throw AutoApiError.Unauthorised();
+			var now = DateTime.UtcNow;
+			post.Created = now;
+			post.Modified = now;
+			_context.posts.Add(post);
+			await _context.SaveChangesAsync();
+			return post.CloneForExport();
 		}
 
-		private async Task<ApiResult> ChangePostAsync(ApiCall apiCall, Action<Post, bool> callback)
+		private async Task<Post> ChangePostAsync(Int64 tokenId, int postId, Action<Post, bool> callback)
 		{
-			try
-			{
-				var token = await quickGetToken(apiCall);
-				if (token == null)
-					return ApiError.InvalidToken();
+				var token = await quickGetToken(tokenId);
+
 				var role = new UserRole( token.User.RawRole );
-				var postId = apiCall.Parameters.IntOrNull("postId");
-				if (postId == null)
-					return ApiError.InvalidParam("postId");
+
 				var post = await (from p in _context.posts
-					where p.Id == postId.Value
+					where p.Id == postId
 					select p).FirstOrDefaultAsync();
 				if (post == null)
-					return ApiError.NotFound();
+					throw AutoApiError.NotFound();
 				bool mayChange = (post.UserId != null && post.UserId == token.UserId) ||
 					role.IsAdmin;
 				if (!mayChange)
-					return ApiError.Unauthorised();
+					throw AutoApiError.Unauthorised();
 				try
 				{
 					callback(post, role.IsAdmin);
 				}
 				catch(Exception ex)
 				{
-					return ApiError.ServerError(ex.Message);
+					if (ex is AutoApiError)
+						throw;
+					throw AutoApiError.ServerError(ex.Message);
 				}
 				post.Modified = DateTime.Now;
 				_context.Update(post);
 				await _context.SaveChangesAsync();
 
-				return new ApiResult<Post>(StdResult.OK, post.CloneForExport());
-			}
-			catch(Exception ex)
-			{
-				Log(ex);
-				return ApiError.ServerError(ex.Message);
-			}
+				return post.CloneForExport();
 		}
 
 		/* getPost(tokenId, Post) -> Success */
@@ -1051,36 +777,23 @@ namespace SGAPI
 				Token: Yes
 				User Role: User | Admin
 		 */	
-		private async Task<ApiResult> getPost(ApiCall apiCall)
+		[SGAutoApi]
+		public async Task<Post> getPost(Int64 tokenId, int postId)
 		{
-			try
-			{
-				var token = await quickGetToken(apiCall);
-				if (token == null)
-					return ApiError.InvalidToken();
-				var tokenRole = token.User.RawRole;
+			var token = await quickGetToken(tokenId);
+			var tokenRole = token.User.RawRole;
 
-				var postId = apiCall.Parameters.IntOrNull("postId");
-				if (postId == null)
-					return ApiError.InvalidParam("postId");
+			var post = await (from p in _context.posts
+				where p.Id == postId
+				select p).FirstOrDefaultAsync();
 
-				var post = await (from p in _context.posts
-					where p.Id == postId.Value
-					select p).FirstOrDefaultAsync();
-				
-				if (tokenRole < post.RoleToRead)
-					return ApiError.Unauthorised();
+			if (tokenRole < post.RoleToRead)
+				throw AutoApiError.Unauthorised();
 
-				if (post == null)
-					return ApiError.NotFound();
-				
-				return new ApiResult<Post>(StdResult.OK, post.CloneForExport());
-			}
-			catch(Exception ex)
-			{
-				Log(ex);
-				return ApiError.ServerError(ex.Message);
-			}
+			if (post == null)
+				throw AutoApiError.NotFound();
+			
+			return post.CloneForExport();
 		}
 
 		/* updatePost(tokenId, Post) -> Success */
@@ -1088,39 +801,30 @@ namespace SGAPI
 			Requirements:
 				Token: Yes
 				User Role: User and post.OwnerId == token.User.Id | Admin
-		 */	
-		private async Task<ApiResult> updatePost(ApiCall apiCall)
+		 */
+		[SGAutoApi]
+		public async Task<Post> updatePost(Int64 tokenId, Post Post)
 		{
-			try
-			{
-				var post = apiCall.Parameters.FromJson<Post>("Post");
-				if (post == null)
-					return ApiError.InvalidParam("Post");
-				apiCall.Parameters.Add("postId", post.Id.ToString());
-				return await ChangePostAsync(apiCall, 
-					(originalPost, isAdmin) =>
+			var post = Post;
+			
+			return await ChangePostAsync(tokenId, post.Id, 
+				(originalPost, isAdmin) =>
+				{
+					if ((originalPost.RoleToEdit != post.RoleToEdit ||
+						originalPost.RoleToRead != post.RoleToRead) &&
+						!isAdmin)
 					{
-						if ((originalPost.RoleToEdit != post.RoleToEdit ||
-							originalPost.RoleToRead != post.RoleToRead) &&
-							!isAdmin)
-						{
-							throw new Exception("Unauthorised");
-						}
-						else
-						{
-							originalPost.RoleToEdit = post.RoleToEdit;
-							originalPost.RoleToEdit = post.RoleToRead;
-						}
-						originalPost.Title = post.Title;
-						originalPost.Body = post.Body;
-						originalPost.Modified = DateTime.UtcNow;
-					});
-			}
-			catch(Exception ex)
-			{
-				Log(ex);
-				return ApiError.ServerError(ex.Message);
-			}
+						throw AutoApiError.NotFound();
+					}
+					else
+					{
+						originalPost.RoleToEdit = post.RoleToEdit;
+						originalPost.RoleToEdit = post.RoleToRead;
+					}
+					originalPost.Title = post.Title;
+					originalPost.Body = post.Body;
+					originalPost.Modified = DateTime.UtcNow;
+				});
 		}
 
 		/* deletePost(tokenId, postId) -> Success */
@@ -1128,10 +832,11 @@ namespace SGAPI
 			Requirements:
 				Token: Yes
 				User Role: User and post.OwnerId == token.User.Id | Admin
-		 */	
-		private async Task<ApiResult> deletePost(ApiCall apiCall)
+		 */
+		[SGAutoApi]
+		public async Task<Post> deletePost(Int64 tokenId, int postId)
 		{
-			return await ChangePostAsync(apiCall, (post, isAdmin) => 
+			return await ChangePostAsync(tokenId, postId, (post, isAdmin) => 
 			{
 				post.Title = "This post has been deleted";
 				post.Body = "This post has beed deleted";
@@ -1147,14 +852,16 @@ namespace SGAPI
 				Token: Yes
 				User Role: Admin
 		 */	
-		private async Task<ApiResult> hidePost(ApiCall apiCall)
+		[SGAutoApi]
+		public async Task<Post> hidePost(Int64 tokenId, int postId)
 		{
-			return await ChangePostAsync(apiCall, (post, isAdmin) => 
-			{
-				if (!isAdmin)
-					throw new Exception("Unauthorised");
-				post.Hidden = true;
-			});
+			return await ChangePostAsync(tokenId, postId,
+				(post, isAdmin) => 
+				{
+					if (!isAdmin)
+						throw AutoApiError.Unauthorised();
+					post.Hidden = true;
+				});
 		}
 
 		/* unhidePost(tokenId, postId) -> Success */
@@ -1163,12 +870,13 @@ namespace SGAPI
 				Token: Yes
 				User Role: Admin
 		 */	
-		private async Task<ApiResult> unhidePost(ApiCall apiCall)
+		[SGAutoApi]
+		public async Task<Post> unhidePost(Int64 tokenId, int postId)
 		{
-			return await ChangePostAsync(apiCall, (post, isAdmin) => 
+			return await ChangePostAsync(tokenId, postId, (post, isAdmin) => 
 			{
 				if (!isAdmin)
-					throw new Exception("Unauthorised");
+					throw AutoApiError.Unauthorised();
 				post.Hidden = false;
 			});
 		}
