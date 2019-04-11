@@ -4,7 +4,9 @@
 
 SGForum is still in very early pre-alpha stages of development.
 
-##Changelog
+## Changes
+
+11 April: Changed the API to use reflection to route and serialise/deserialise the objects coming in and going out automatically. Should make for quicker and easier extensibility.
 
 9 April: Added markdown interpretter so that posts can now contain markdown which will be converted to HTML at render.
 
